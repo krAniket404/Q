@@ -214,7 +214,7 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
         4. Be brief (under 60 words). Emojis allowed. No markdown.
       `;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${API_KEY}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -223,8 +223,13 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
         })
       });
 
+      if (!response.ok) {
+        console.warn("Gemini API Error:", response.status, response.statusText);
+        return "I'm having trouble connecting to my cloud brain. Ask me about your scores instead!";
+      }
+
       const data = await response.json();
-      if (data.candidates && data.candidates[0].content) {
+      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
         return data.candidates[0].content.parts[0].text;
       }
       return "My brain short-circuited. Try asking me something else.";

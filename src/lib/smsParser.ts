@@ -85,20 +85,34 @@ export function parseBankSMS(smsBody: string, smsDate: number): ParsedTransactio
   merchant = merchant.replace(/\b(ON|REF|AVBL|VIA|UPI|YBL|OKAXIS|OKHDFCBANK|VPA|A\/C|ACCT|ACCOUNT|BAL|RRN|WWW|COM|NOT YOU|SMS BLOCK|INFO|YOUR|NOTIF|TXN|TRF|TRANSFER)\b/g, '').trim();
   merchant = merchant.replace(/[;:\.]+$/, '').trim();
 
+  // Advanced Merchant Normalization & Title Case Formatting
+  merchant = normalizeMerchantName(merchant);
+
+  const toTitleCase = (str: string) => {
+    return str.toLowerCase().split(' ').map(word => {
+      if (word.length === 0) return '';
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
+  };
+
+  if (merchant !== 'Unknown') {
+    merchant = toTitleCase(merchant);
+  }
+
   // PSU Bank Special Handling (Canara, SBI, PNB often have specific strings)
-  if (merchant.includes('VPA')) {
+  if (merchant.toUpperCase().includes('VPA')) {
       const vpaMatch = cleanBody.match(/VPA\s+([A-Za-z0-9\s]+?)(?=\s|;|\.|$)/i);
-      if (vpaMatch) merchant = vpaMatch[1].trim().toUpperCase();
+      if (vpaMatch) merchant = toTitleCase(vpaMatch[1].trim());
   }
 
   // AMEX Special Handling
   if (upperBody.includes('AMEX') || upperBody.includes('AMERICAN EXPRESS')) {
       const amexMerchantMatch = cleanBody.match(/AT\s+([A-Za-z0-9\s&'-]+?)(?=\sON\s|\sAT\s|\sUSING\s|\sWITH\s|\.|$)/i);
-      if (amexMerchantMatch) merchant = amexMerchantMatch[1].trim().toUpperCase();
+      if (amexMerchantMatch) merchant = toTitleCase(amexMerchantMatch[1].trim());
       bank = 'AMEX';
   }
 
-  if (merchant.length < 3) merchant = 'Unknown';
+  if (merchant.length < 2) merchant = 'Unknown';
 
   // 6. Identify Bank
   const bankPatterns = [

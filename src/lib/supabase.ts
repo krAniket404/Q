@@ -7,14 +7,29 @@ const STORAGE_KEY = 'supabase_auth_token';
 
 // Custom Storage Adapter using Android SharedPreferences (via SmsModule)
 const CustomStorage = {
-  async getItem(key: string) {
-    return await SmsModule.loadData(key);
+  async getItem(key: string): Promise<string | null> {
+    try {
+      if (!SmsModule) return null;
+      const value = await SmsModule.loadData(key);
+      if (!value || value === '' || value === 'null' || value === 'undefined') return null;
+      return value;
+    } catch (e) {
+      return null;
+    }
   },
-  async setItem(key: string, value: string) {
-    await SmsModule.saveData(key, value);
+  async setItem(key: string, value: string): Promise<void> {
+    try {
+      if (SmsModule) {
+        await SmsModule.saveData(key, value);
+      }
+    } catch (e) {}
   },
-  async removeItem(key: string) {
-    await SmsModule.saveData(key, ''); // Save empty string to clear it
+  async removeItem(key: string): Promise<void> {
+    try {
+      if (SmsModule) {
+        await SmsModule.saveData(key, ''); // Save empty string to clear it
+      }
+    } catch (e) {}
   },
 };
 

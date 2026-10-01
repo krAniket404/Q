@@ -15,8 +15,9 @@ import AICoachScreen from './src/screens/AICoachScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import CircularScoreCard from './src/components/CircularScoreCard';
 import PremiumChart from './src/components/PremiumChart';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import { runInBatches, getFirebaseAuth, getFirebaseFirestore, getServerTimestamp } from './src/lib/firebase';
 import AuthScreen from './src/screens/AuthScreen';
 import { getScoreColor as getDynamicScoreColor } from './src/theme/scoreColor';
 import PaywallScreen from './src/screens/PaywallScreen';
@@ -80,6 +81,7 @@ export default function App() {
   const [currentThemeId, setCurrentThemeId] = useState('azure');
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const theme = THEMES[currentThemeId] || THEMES.azure;
   const C = theme; // Backward compatibility for existing UI
@@ -121,11 +123,102 @@ export default function App() {
   // --- EFFECTS ---
 
   useEffect(() => {
-    if (isBiometricEnabled) {
+    // 1. Force-load fallback (Ensure app opens even if Firebase hangs)
+    const timer = setTimeout(() => {
+      console.warn("Initialization took too long, force-loading...");
+      setIsLoaded(true);
+    }, 3000);
+
+    // 2. Parallel Initialization
+    const initApp = async () => {
+      try {
+        await loadSavedData();
+
+        // 1. Check Firebase session
+        try {
+          const authInstance = getFirebaseAuth();
+          const currentUser = authInstance?.currentUser;
+          if (currentUser) {
+            setSession(currentUser);
+            pullFromCloud(currentUser.uid);
+            fetchMLFromSupabase(currentUser.uid);
+            setIsLoaded(true);
+            clearTimeout(timer);
+            return;
+          }
+        } catch (e) {}
+
+        // 2. Check Supabase session
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (data?.session?.user) {
+            const user = {
+              uid: data.session.user.id,
+              email: data.session.user.email
+            };
+            setSession(user);
+            pullFromCloud(user.uid);
+            fetchMLFromSupabase(user.uid);
+          }
+        } catch (e) {}
+
+        setIsLoaded(true);
+        clearTimeout(timer);
+      } catch (e) {
+        console.error("Init Error:", e);
+        setIsLoaded(true);
+      }
+    };
+
+    initApp();
+
+    // 3. Supabase Auth Listener
+    const { data: supaAuthListener } = supabase.auth.onAuthStateChange(async (event, supaSession) => {
+      if (supaSession?.user) {
+        const user = {
+          uid: supaSession.user.id,
+          email: supaSession.user.email
+        };
+        setSession(user);
+        await pullFromCloud(user.uid);
+        await fetchMLFromSupabase(user.uid);
+      } else if (event === 'SIGNED_OUT') {
+        setSession(null);
+      }
+      setIsLoaded(true);
+      clearTimeout(timer);
+    });
+
+    // 4. Firebase Auth Listener
+    let unsub: any = null;
+    try {
+      const authInst = getFirebaseAuth();
+      if (authInst && typeof authInst.onAuthStateChanged === 'function') {
+        unsub = authInst.onAuthStateChanged(async (user: any) => {
+          if (user) {
+            setSession(user);
+            await pullFromCloud(user.uid);
+            await fetchMLFromSupabase(user.uid);
+          }
+          setIsLoaded(true);
+          clearTimeout(timer);
+        });
+      }
+    } catch (e) {}
+
+    return () => {
+      unsub && unsub();
+      supaAuthListener?.subscription?.unsubscribe();
+      clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isBiometricEnabled && isLoaded) {
       setIsLocked(true);
       handleBiometricUnlock();
     }
-  }, [isBiometricEnabled]);
+  }, [isBiometricEnabled, isLoaded]);
 
   const handleBiometricUnlock = async () => {
     try {
@@ -406,8 +499,8 @@ export default function App() {
       persona = { name: 'The Stealth Saver', desc: 'Highly disciplined. You crush your savings goals without thinking twice.', icon: 'shield-check', color: C.success };
     } else if (recurringCharges.knownSubscriptions.length >= 4) {
       persona = { name: 'The Subscription Hoarder', desc: 'You have 4+ active recurring subscriptions. Time to audit and cancel the unused ones!', icon: 'package-variant-closed', color: C.purple };
-    } else if (topCat === 'Food' && scores.impulse > 50) {
-      persona = { name: 'The Foodie Impulser', desc: 'Food is your top category, and your impulse score is high. Those late-night deliveries add up!', icon: 'food-apple-outline', color: C.warning };
+    } else if (topCat === 'Dining & Delivery' && scores.impulse > 50) {
+      persona = { name: 'The Foodie Impulser', desc: 'Dining & Delivery is your top category, and your impulse score is high. Those late-night deliveries add up!', icon: 'food-apple-outline', color: C.warning };
     } else if (scores.impulse > 40 && scores.discipline < 50) {
       persona = { name: 'The Weekend Warrior', desc: 'You stay disciplined during the week, but cut loose on the weekends.', icon: 'party-popper', color: C.warning };
     }
@@ -517,6 +610,11 @@ export default function App() {
       const activationDate = new Date(activationTime);
       activationDate.setHours(0, 0, 0, 0);
 
+      // We only count forward from activationDate
+      // If today is Sept 10 and we set it Sept 10, streak is 0 until Sept 11
+      // Actually, user wants it to start from the date they set it.
+      // Usually, a streak of "1 day" means 1 full day of discipline.
+
       while (checkDate >= activationDate) {
         const dateStr = checkDate.toDateString();
         const dayTxns = debitTxns.filter(t => t.date.toDateString() === dateStr);
@@ -621,7 +719,17 @@ export default function App() {
       if (parsed.labeledTxnIds) setLabeledTxnIds(parsed.labeledTxnIds);
       if (parsed.worthItTxnIds) setWorthItTxnIds(parsed.worthItTxnIds);
       if (parsed.goals) setGoals(parsed.goals);
-      if (parsed.activeStreaks) setActiveStreaks(parsed.activeStreaks);
+      if (parsed.activeStreaks) {
+        if (Array.isArray(parsed.activeStreaks)) {
+            // Migration: Convert array to object with current time as activation
+            const migrated: Record<string, number> = {};
+            parsed.activeStreaks.forEach((id: string) => { migrated[id] = Date.now(); });
+            setActiveStreaks(migrated);
+            saveState({ activeStreaks: migrated });
+        } else {
+            setActiveStreaks(parsed.activeStreaks);
+        }
+      }
       if (parsed.manualCategories) setManualCategories(parsed.manualCategories);
       if (parsed.emergencyTxnIds) setEmergencyTxnIds(parsed.emergencyTxnIds);
       if (parsed.pinnedFeatures) setPinnedFeatures(parsed.pinnedFeatures);
@@ -646,6 +754,8 @@ export default function App() {
   };
 
   const saveState = async (overrides: any = {}) => {
+    if (!isLoaded) return; // Prevent overwriting with empty state
+
     const payload = {
       mode: overrides.mode ?? mode,
       userLabels: overrides.userLabels ?? userLabels,
@@ -734,7 +844,7 @@ export default function App() {
         Keep it under 40 words. Do not use markdown or hashtags.
       `;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${API_KEY}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -743,9 +853,13 @@ export default function App() {
         })
       });
 
-      const data = await response.json();
-      if (data.candidates && data.candidates[0].content) {
-        setMorningBriefing(data.candidates[0].content.parts[0].text);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+          setMorningBriefing(data.candidates[0].content.parts[0].text);
+        } else {
+          setMorningBriefing("Good morning! Ready to make some smart financial moves today?");
+        }
       } else {
         setMorningBriefing("Good morning! Ready to make some smart financial moves today?");
       }
@@ -854,7 +968,9 @@ export default function App() {
 
       const existingLabels = saved?.userLabels;
       if (existingLabels && existingLabels.length > 0) {
-        model.train(existingLabels); setUserLabels(existingLabels);
+        model.train(existingLabels);
+        setUserLabels(existingLabels);
+        if (session) syncMLToSupabase(session.uid);
       } else {
         const totalSpend = debitTxns.reduce((sum, t) => sum + t.amount, 0);
         const avgAmt = totalSpend / debitTxns.length;
@@ -864,7 +980,10 @@ export default function App() {
           const isImpulsive = (hour >= 22 || hour <= 6) || t.amount > avgAmt ? 1 : 0;
           return { txnFeatures: features, isImpulsive };
         });
-        model.train(pseudoLabels); setUserLabels(pseudoLabels); saveState({ userLabels: pseudoLabels });
+        model.train(pseudoLabels);
+        setUserLabels(pseudoLabels);
+        saveState({ userLabels: pseudoLabels });
+        if (session) syncMLToSupabase(session.uid);
       }
 
       Animated.parallel([
@@ -903,6 +1022,18 @@ export default function App() {
     setLabeledTxnIds(updatedLabeledIds);
     setWorthItTxnIds(updatedWorthIt);
     model.train(updatedLabels);
+
+    if (session) {
+      syncMLToSupabase(session.uid);
+      // Save label to Supabase ml_labels table
+      try {
+        supabase.from('ml_labels').insert({
+          user_id: session.uid,
+          txn_features: features,
+          is_impulsive: isImpulsive
+        }).then(() => {}).catch(() => {});
+      } catch (e) {}
+    }
 
     const debitTxns = transactions.filter(t => t.type === 'debit');
     const liberalTxns = debitTxns.filter(t => !updatedWorthIt.includes(t.id!) && !emergencyTxnIds.includes(t.id!));
@@ -948,23 +1079,198 @@ export default function App() {
   };
 
   const syncToCloud = async (txns: ParsedTransaction[]) => {
-    const userId = session?.uid || 'test-user-123';
+    if (!session || !isLoaded) return;
+    const userId = session.uid;
+    console.log(`[Backend] Syncing ${txns.length} transactions to cloud for user ${userId}...`);
+
+    // 1. Firebase Sync (if available)
     try {
-      const batch = firestore().batch();
-      txns.forEach(t => {
-        const docRef = firestore().collection('transactions').doc(`${userId}_${t.date.getTime()}_${t.amount}_${t.merchant}`);
-        batch.set(docRef, {
-          user_id: userId,
-          amount: t.amount,
-          merchant: t.merchant,
-          category: t.category,
-          txn_date: t.date.toISOString(),
-          type: t.type
+      const db = getFirebaseFirestore();
+      if (db && typeof db.collection === 'function') {
+        await runInBatches(txns, (batch, t) => {
+          const merchantKey = (t.merchant || 'unknown').replace(/[\/\.#$\[\]]/g, '_');
+          const docRef = db.collection('transactions').doc(`${userId}_${t.date ? t.date.getTime() : Date.now()}_${t.amount}_${merchantKey}`);
+          batch.set(docRef, {
+            user_id: userId,
+            amount: t.amount || 0,
+            merchant: t.merchant || 'Unknown',
+            category: t.category || 'Other',
+            txn_date: t.date ? t.date.toISOString() : new Date().toISOString(),
+            type: t.type || 'debit'
+          }, { merge: true });
+        });
+
+        await db.collection('profiles').doc(userId).set({
+          worthItTxnIds,
+          manualCategories,
+          merchantMap,
+          updated_at: getServerTimestamp()
         }, { merge: true });
-      });
-      await batch.commit();
+      }
     } catch (e) {
-      console.warn('Failed to sync to cloud', e);
+      console.warn('[Backend] Firebase sync skipped', e);
+    }
+
+    // 2. Supabase Sync (Syncs to Supabase transactions & profiles tables)
+    try {
+      if (txns.length > 0) {
+        const supaPayload = txns.slice(0, 100).map(t => ({
+          user_id: userId,
+          amount: t.amount || 0,
+          merchant: t.merchant || 'Unknown',
+          category: t.category || 'Other',
+          txn_date: t.date ? t.date.toISOString() : new Date().toISOString(),
+          type: t.type || 'debit'
+        }));
+
+        await supabase.from('transactions').upsert(supaPayload, { ignoreDuplicates: true });
+      }
+
+      await supabase.from('profiles').upsert({
+        id: userId,
+        mode: mode || 'liberal',
+        subscription_status: 'active'
+      }, { onConflict: 'id' });
+
+      console.log(`[Backend] Supabase Cloud sync complete ✅`);
+    } catch (e) {
+      console.warn('[Backend] Supabase Cloud sync warning', e);
+    }
+  };
+
+  const pullFromCloud = async (userId: string) => {
+    try {
+      console.log("[Backend] Pulling transaction history from cloud...");
+
+      // 1. Try Firebase Firestore
+      try {
+        const db = getFirebaseFirestore();
+        if (db && typeof db.collection === 'function') {
+          const snapshot = await db
+            .collection('transactions')
+            .where('user_id', '==', userId)
+            .limit(200)
+            .get();
+
+          if (snapshot && snapshot.docs && snapshot.docs.length > 0) {
+            const cloudTxns: ParsedTransaction[] = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                amount: data.amount || 0,
+                merchant: data.merchant || 'Unknown',
+                category: data.category || 'Other',
+                date: new Date(data.txn_date || Date.now()),
+                type: data.type || 'debit',
+                bank: 'Cloud Sync',
+                raw: '[Cloud Restore]'
+              };
+            }).sort((a, b) => b.date.getTime() - a.date.getTime());
+
+            setTransactions(prev => {
+              const merged = [...prev];
+              cloudTxns.forEach(ct => {
+                if (!merged.some(pt => pt.amount === ct.amount && pt.merchant === ct.merchant && pt.date.getTime() === ct.date.getTime())) {
+                  merged.push(ct);
+                }
+              });
+              return merged.sort((a, b) => b.date.getTime() - a.date.getTime());
+            });
+          }
+        }
+      } catch (e) {}
+
+      // 2. Try Supabase Transactions
+      try {
+        const { data: supaTxns, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', userId)
+          .limit(200);
+
+        if (supaTxns && supaTxns.length > 0 && !error) {
+          const cloudTxns: ParsedTransaction[] = supaTxns.map(t => ({
+            id: t.id,
+            amount: t.amount || 0,
+            merchant: t.merchant || 'Unknown',
+            category: t.category || 'Other',
+            date: new Date(t.txn_date || Date.now()),
+            type: t.type || 'debit',
+            bank: 'Supabase Sync',
+            raw: '[Cloud Restore]'
+          }));
+
+          setTransactions(prev => {
+            const merged = [...prev];
+            cloudTxns.forEach(ct => {
+              if (!merged.some(pt => pt.amount === ct.amount && pt.merchant === ct.merchant && pt.date.getTime() === ct.date.getTime())) {
+                merged.push(ct);
+              }
+            });
+            return merged.sort((a, b) => b.date.getTime() - a.date.getTime());
+          });
+        }
+      } catch (e) {}
+
+      // 3. Restore Profile Preferences from Firebase if available
+      try {
+        const db = getFirebaseFirestore();
+        if (db && typeof db.collection === 'function') {
+          const profileDoc = await db.collection('profiles').doc(userId).get();
+          if (profileDoc && profileDoc.exists) {
+            const p = profileDoc.data();
+            if (p?.worthItTxnIds) setWorthItTxnIds(p.worthItTxnIds);
+            if (p?.manualCategories) setManualCategories(p.manualCategories);
+            if (p?.merchantMap) setMerchantMap(p.merchantMap);
+            console.log("[Backend] Profile preferences restored ✅");
+          }
+        }
+      } catch (e) {}
+
+    } catch (e) {
+      console.error("[Backend] Pull from cloud failed ❌", e);
+    }
+  };
+
+  const syncMLToSupabase = async (userId: string) => {
+    if (!model) return;
+    const modelData = model.getModel();
+    try {
+      const { error } = await supabase
+        .from('user_models')
+        .upsert({
+          user_id: userId,
+          weights: modelData.weights,
+          bias: modelData.bias,
+          label_count: modelData.labelCount,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+
+      if (error) throw error;
+      console.log("ML weights synced to Supabase");
+    } catch (e) {
+      console.warn("Supabase ML sync failed", e);
+    }
+  };
+
+  const fetchMLFromSupabase = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_models')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (data && !error) {
+        console.log("Restoring ML weights from Supabase");
+        model.loadModel({
+          weights: data.weights,
+          bias: data.bias,
+          labelCount: data.label_count
+        });
+      }
+    } catch (e) {
+      console.warn("Supabase ML fetch failed", e);
     }
   };
 
@@ -1137,13 +1443,24 @@ export default function App() {
   }, [worthItTxnIds, emergencyTxnIds, scores.savingsRate]);
 
   useEffect(() => {
-    loadSavedData().then(() => {
-        checkPermission(savedStateRef.current);
-    });
+    // Initial check handled by onAuthStateChanged
   }, []);
 
+  if (!isLoaded) {
+    return (
+      <View style={[styles.darkContainer, { backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: `${theme.accent}15`, justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}>
+          <Icon name="lightning-bolt" size={40} color={theme.accent} />
+        </View>
+        <ActivityIndicator color={theme.accent} size="large" />
+        <Text style={{ color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginTop: 24 }}>Waking up CentiQ</Text>
+        <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 8 }}>Preparing your behavioral profile...</Text>
+      </View>
+    );
+  }
+
   if (!session) {
-      setSession({ uid: 'test-user-123' } as any);
+    return <AuthScreen />;
   }
 
   if (!hasPermission) {
@@ -1512,22 +1829,28 @@ export default function App() {
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <Text style={styles.leakMerchant}>{l.merchant}</Text>
+                                {l.confidence === 'high' && (
+                                    <View style={{ backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <Text style={{ color: C.success, fontSize: 8, fontWeight: '800' }}>VERIFIED</Text>
+                                    </View>
+                                )}
                                 {l.hasPriceIncrease && (
                                     <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                                         <Text style={{ color: C.danger, fontSize: 8, fontWeight: '800' }}>PRICE UP</Text>
                                     </View>
                                 )}
-                                {l.isGhost && (
-                                    <View style={{ backgroundColor: 'rgba(139,92,246,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ color: C.purple, fontSize: 8, fontWeight: '800' }}>GHOST</Text>
-                                    </View>
-                                )}
                             </View>
                             <Text style={styles.leakCount}>
-                                {l.isGhost ? "No 'Worth It' tags in 60d" : `Charged ${l.count} times`}
+                                {l.billingCycle === 'monthly' ? 'Monthly' : l.billingCycle === 'yearly' ? 'Yearly' : `Charged ${l.count} times`}
+                                {l.nextExpectedDate && ` · Next: ${new Date(l.nextExpectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
                             </Text>
                           </View>
-                          <Text style={styles.leakAmount}>₹{l.amount.toLocaleString('en-IN')}</Text>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.leakAmount}>₹{l.amount.toLocaleString('en-IN')}</Text>
+                            {l.isGhost && (
+                                <Text style={{ color: C.purple, fontSize: 9, fontWeight: '700', marginTop: 2 }}>GHOST DETECTED</Text>
+                            )}
+                          </View>
                         </View>
                       ))}
                     </>
@@ -1554,7 +1877,7 @@ export default function App() {
                     <Text style={[styles.cardTopRowValue, { color: C.warning }]}>₹{recurringCharges.totalRepetitiveCost.toLocaleString('en-IN')}/mo</Text>
                   </View>
                   <Text style={{ color: C.textSecondary, fontSize: 13, marginBottom: 14, lineHeight: 18 }}>
-                    We detected {recurringCharges.repetitivePayments.length} recurring charges (bills, rent, gyms, etc). Tap to view dates.
+                    We detected {recurringCharges.repetitivePayments.length} recurring charges (food delivery, cab commutes, bills, recharges). Tap to view dates.
                   </Text>
 
                   {(showAllRepetitive ? recurringCharges.repetitivePayments : recurringCharges.repetitivePayments.slice(0, 3)).map((l: any, i: number) => {

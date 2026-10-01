@@ -131,6 +131,9 @@ export interface RecurringCharge {
   isGhost?: boolean;
   isDuplicate?: boolean;
   previousAmount?: number;
+  confidence: 'high' | 'medium' | 'low';
+  billingCycle?: 'monthly' | 'yearly' | 'unknown';
+  nextExpectedDate?: Date;
 }
 
 export interface SubscriptionResult {
@@ -167,6 +170,21 @@ export function detectSubscriptionLeaks(transactions: ParsedTransaction[], worth
       const latestAmt = sorted[0].amount;
       const previousAmt = sorted[1]?.amount || latestAmt;
       const hasPriceIncrease = latestAmt > previousAmt * 1.05; // 5% buffer
+
+      // Cycle Detection: Check for roughly 30-day or 365-day intervals
+      let hasCycle = false;
+      let intervalDays = 0;
+      if (sorted.length >= 2) {
+        const d1 = sorted[0].date.getTime();
+        const d2 = sorted[1].date.getTime();
+        const diffDays = Math.round(Math.abs(d1 - d2) / (1000 * 60 * 60 * 24));
+
+        // Match 28-32 days (monthly) or 360-370 days (yearly)
+        if ((diffDays >= 28 && diffDays <= 32) || (diffDays >= 360 && diffDays <= 370)) {
+          hasCycle = true;
+          intervalDays = diffDays;
+        }
+      }
 
       // Ghost detection: check if any transaction in last 60 days was marked "Worth It"
       const recentTxns = group.filter(t => t.date.getTime() > sixtyDaysAgo);
@@ -213,12 +231,27 @@ export function detectSubscriptionLeaks(transactions: ParsedTransaction[], worth
         hasPriceIncrease,
         isGhost,
         isDuplicate,
-        previousAmount: previousAmt
+        previousAmount: previousAmt,
+        confidence: 'low',
+        billingCycle: 'unknown'
       };
 
-      if (isKnownSubscription(charge.merchant)) {
+      if (hasCycle) {
+        charge.billingCycle = intervalDays >= 360 ? 'yearly' : 'monthly';
+        // Predict next date
+        const nextDate = new Date(sorted[0].date);
+        nextDate.setDate(nextDate.getDate() + (intervalDays || 30));
+        charge.nextExpectedDate = nextDate;
+      }
+
+      const isKnown = isKnownSubscription(charge.merchant);
+
+      // Assign Confidence & Route to correct card
+      if (isKnown) {
+        charge.confidence = hasCycle ? 'high' : 'medium';
         knownSubs.push(charge);
-      } else if (group.length >= 3) {
+      } else if (group.length >= 2) {
+        charge.confidence = (hasCycle || group.length >= 3) ? 'medium' : 'low';
         repetitivePays.push(charge);
       }
     }

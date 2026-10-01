@@ -9,19 +9,19 @@ import { Theme, THEMES } from '../theme/themes';
 const { SmsModule } = NativeModules;
 
 const CAT_COLORS: { [key: string]: string } = {
-  Food: '#F59E0B', Groceries: '#84CC16', Shopping: '#8B5CF6', Travel: '#38BDF8',
+  'Dining & Delivery': '#F59E0B', Groceries: '#84CC16', Shopping: '#8B5CF6', Travel: '#38BDF8',
   Entertainment: '#EF4444', Bills: '#10B981', Health: '#F97316', Other: '#64748B', Income: '#10B981',
   'Personal Care': '#EC4899'
 };
 
 const CAT_ICONS: { [key: string]: string } = {
-  Food: 'food-apple-outline', Groceries: 'cart-outline', Shopping: 'shopping-outline', Travel: 'airplane',
+  'Dining & Delivery': 'food-apple-outline', Groceries: 'cart-outline', Shopping: 'shopping-outline', Travel: 'airplane',
   Entertainment: 'movie-open-outline', Bills: 'file-document-outline', Health: 'pill', Other: 'package-variant-closed', Income: 'cash-multiple',
   'Personal Care': 'content-cut'
 };
 
 const DEFAULT_BUDGETS: { [key: string]: number } = {
-  Food: 4000, Groceries: 3000, Shopping: 5000, Travel: 1500,
+  'Dining & Delivery': 4000, Groceries: 3000, Shopping: 5000, Travel: 1500,
   Entertainment: 1000, Bills: 2000, Health: 1000, 'Personal Care': 1500, Other: 2000
 };
 

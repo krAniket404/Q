@@ -60,10 +60,17 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     @ReactMethod
     fun saveData(key: String, value: String, promise: Promise) {
         try {
+            android.util.Log.d("SmsModule", "Saving data for key: $key (length: ${value.length})")
             val prefs = reactApplicationContext.getSharedPreferences("centiq_prefs", Context.MODE_PRIVATE)
-            prefs.edit().putString(key, value).apply()
-            promise.resolve(true)
+            val success = prefs.edit().putString(key, value).commit() // Use commit() for immediate write confirmation in debug
+            if (success) {
+                promise.resolve(true)
+            } else {
+                android.util.Log.e("SmsModule", "SharedPreferences commit failed for key: $key")
+                promise.reject("SAVE_FAILED", "Failed to commit to SharedPreferences")
+            }
         } catch (e: Exception) {
+            android.util.Log.e("SmsModule", "Exception saving data: ${e.message}")
             promise.reject("SAVE_ERROR", e)
         }
     }
@@ -71,9 +78,13 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     @ReactMethod
     fun loadData(key: String, promise: Promise) {
         try {
+            android.util.Log.d("SmsModule", "Loading data for key: $key")
             val prefs = reactApplicationContext.getSharedPreferences("centiq_prefs", Context.MODE_PRIVATE)
-            promise.resolve(prefs.getString(key, null))
+            val data = prefs.getString(key, null)
+            android.util.Log.d("SmsModule", "Data loaded for key: $key (found: ${data != null})")
+            promise.resolve(data)
         } catch (e: Exception) {
+            android.util.Log.e("SmsModule", "Exception loading data: ${e.message}")
             promise.reject("LOAD_ERROR", e)
         }
     }

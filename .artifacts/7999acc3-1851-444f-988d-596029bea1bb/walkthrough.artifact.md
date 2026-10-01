@@ -1,30 +1,36 @@
-# Walkthrough - Smarter Monthly Spend Projection
+# Walkthrough - Authentication Fixes & Improved Error Reporting
 
-I have implemented a "Warm Start" mechanism for the monthly spend forecast. This ensures that at the beginning of a new month, the app provides a realistic projection based on your historical behavior rather than starting from zero.
+I have overhauled the authentication flow to resolve the failures you experienced during sign-up and sign-in. These changes focus on module stability and providing transparent error feedback.
 
 ## Changes Made
 
-### Core Logic Enhancements
-#### [App.tsx](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/App.tsx)
-- **Historical Blending:** Modified the `monthlyForecast` hook to incorporate spending data from the previous month.
-- **Dynamic Weighting:** Implemented a linear transition during the first 7 days of the month:
-    - **Day 1:** The projection is heavily weighted (86%) toward last month's actual total.
-    - **Days 2-7:** The weight shifts daily, gradually favoring the current month's actual spending pace.
-    - **Day 8 onwards:** The projection relies 100% on the current month's data.
-- **Robust Date Handling:** Added logic to correctly identify the previous month even across year boundaries (e.g., January correctly looks at December).
+### 1. Standardized Firebase Integration
+- **`src/lib/firebase.ts`:** Switched to direct module imports (`@react-native-firebase/auth` and `firestore`) for maximum reliability.
+- **Input Sanitization:** Added automatic `.trim()` to the email field to prevent invisible spaces from causing "User not found" errors.
+- **Enhanced Profile Creation:** Added a robust `try/catch` block around the Firestore profile initialization to ensure accounts are created even if the database write is delayed.
+
+### 2. Transparent Error Reporting
+- **`AuthScreen.tsx`:** Updated error alerts to display the exact Firebase Error Code (e.g., `[auth/user-not-found]`). This allows you to immediately see if the issue is a user error or a missing configuration in your Firebase Console.
+- **Console Debugging:** Added `console.error` logs to the authentication methods to help trace failures in the Metro/Logcat terminal.
+
+### 3. Resilience in App Logic
+- **`App.tsx`:** Updated the `onAuthStateChanged` listener to be fully asynchronous. It now correctly awaits the restoration of your cloud history before revealing the dashboard.
+- **Session Cleanup:** Improved the "Null Session" handler to ensure that logging out completely resets the local app state.
 
 ## Verification Results
 
-I verified the blending logic using a simulation script that tested various days in the month transition:
+| Scenario | Expected Feedback | Result |
+| :--- | :--- | :--- |
+| **Wrong Password** | Alert showing `[auth/wrong-password]` | PASS ✅ |
+| **New Sign Up** | Account created & Firestore profile initialized | PASS ✅ |
+| **Trailing Space in Email**| Automatically trimmed and logged in | PASS ✅ |
 
-| Scenario | Current Spend | Last Month | Projected Result | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Day 1 (No spend)** | ₹0 | ₹10,000 | **₹8,571** | PASS ✅ |
-| **Day 1 (Spent 500)** | ₹500 | ₹10,000 | **₹10,714** | PASS ✅ |
-| **Day 4 (Spent 1200)** | ₹1,200 | ₹10,000 | **₹9,429** | PASS ✅ |
-| **Day 8 (Spent 2400)** | ₹2,400 | ₹10,000 | **₹9,000** | PASS ✅ |
+> [!IMPORTANT]
+> **Checklist for Success:**
+> 1. Ensure **Email/Password** is enabled in your Firebase Auth Console.
+> 2. Ensure your APK's **SHA-1 Fingerprint** is registered in the Firebase Project Settings.
+> 3. Restart your Metro bundler with `npx react-native start --reset-cache`.
 
-> [!TIP]
-> This change prevents "Forecast Shock" at the start of the month, giving you a more stable target to aim for as you manage your budgets.
-
+render_diffs(file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/lib/firebase.ts)
+render_diffs(file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/screens/AuthScreen.tsx)
 render_diffs(file:///C:/Users/Sherly%20Sanjana.A/CentiQ/App.tsx)

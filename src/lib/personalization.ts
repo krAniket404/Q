@@ -73,4 +73,11 @@ export class UserBehaviorModel {
   getModel() {
     return { weights: this.weights, bias: this.bias, labelCount: this.labelCount };
   }
+
+  // Load weights from cloud
+  loadModel(data: { weights: number[], bias: number, labelCount: number }) {
+    this.weights = data.weights || [0, 0, 0];
+    this.bias = data.bias || 0;
+    this.labelCount = data.labelCount || 0;
+  }
 }
