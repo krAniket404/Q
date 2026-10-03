@@ -19,6 +19,26 @@ export interface Theme {
 }
 
 export const THEMES: { [key: string]: Theme } = {
+  // Q Intelligence: black / off-white / silver with one restrained emerald accent. Matches the website.
+  q: {
+    id: 'q',
+    name: 'Q Intelligence',
+    bg: '#0A0A09',
+    accent: '#5FD3A2',
+    secondary: '#B9B8B2',
+    textPrimary: '#ECEBE6',
+    textSecondary: '#B9B8B2',
+    glass: 'rgba(255,255,255,0.05)',
+    glassStrong: 'rgba(255,255,255,0.08)',
+    glassHighlight: 'rgba(255,255,255,0.26)',
+    border: 'rgba(255,255,255,0.09)',
+    borderStrong: 'rgba(255,255,255,0.14)',
+    success: '#5FD3A2',
+    warning: '#E0A84F',
+    danger: '#E0675A',
+    purple: '#8FB4E8',
+    shadow: '#000000',
+  },
   azure: {
     id: 'azure',
     name: 'Azure Glass',

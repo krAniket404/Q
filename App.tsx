@@ -78,12 +78,12 @@ export default function App() {
   const [emergencyReason, setEmergencyReason] = useState('');
   const [pinnedFeatures, setPinnedFeatures] = useState<string[]>(['wellness', 'persona', 'streaks', 'vault', 'heatmap', 'subs', 'repetitive', 'feed', 'forecast', 'goals', 'chart']);
   const [merchantMap, setMerchantMap] = useState<{[key: string]: string}>({});
-  const [currentThemeId, setCurrentThemeId] = useState('azure');
+  const [currentThemeId, setCurrentThemeId] = useState('q');
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const theme = THEMES[currentThemeId] || THEMES.azure;
+  const theme = THEMES[currentThemeId] || THEMES.q;
   const C = theme; // Backward compatibility for existing UI
 
   const [morningBriefing, setMorningBriefing] = useState<string | null>(null);

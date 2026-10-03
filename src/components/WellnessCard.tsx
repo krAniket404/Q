@@ -1,15 +1,13 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import CircularScoreCard from './CircularScoreCard';
+import QCore from './QCore';
+import QStatus from './QStatus';
+import Glass from './Glass';
+import { Typography } from '../theme/typography';
+import { TypeScale, QCoreState } from '../theme/tokens';
 import { getScoreColor as getDynamicScoreColor } from '../theme/scoreColor';
 import AnimatedNumber from './AnimatedNumber';
 import { Theme, THEMES } from '../theme/themes';
-
-const Typography = {
-  fontFamilyRegular: 'lato_regular',
-  fontFamilyMedium: 'lato_regular',
-  fontFamilyBold: 'lato_bold',
-};
 
 function createStyles(C: Theme) {
   return StyleSheet.create({
@@ -18,16 +16,15 @@ function createStyles(C: Theme) {
     borderWidth: 1, borderRadius: 32,
     shadowColor: "#000", shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.4, shadowRadius: 32, elevation: 8,
   },
-  cardHeaderTitle: { color: C.textSecondary, fontSize: 11, fontWeight: '800', letterSpacing: 1.8, marginBottom: 18, fontFamily: Typography.fontFamilyBold },
-  ringWrap: {
-    width: 108, height: 108, justifyContent: 'center', alignItems: 'center', marginRight: 20,
-    shadowColor: '#38BDF8', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 24, elevation: 10,
-  },
+  cardHeaderTitle: { color: C.textSecondary, fontSize: TypeScale.label, fontWeight: '700', marginBottom: 6, fontFamily: Typography.fontFamilyBold },
+  coreScore: { color: C.textPrimary, fontSize: 38, letterSpacing: -1.5, fontFamily: Typography.fontFamilyLight },
+  coreLabel: { color: C.textSecondary, fontSize: TypeScale.micro, marginTop: -2, fontFamily: Typography.fontFamilyMedium },
+  ringWrap: { width: 116, height: 116, justifyContent: 'center', alignItems: 'center', marginRight: 18 },
   meterContainer: { marginBottom: 16 },
   meterLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  meterLabel: { color: C.textSecondary, fontSize: 13, fontFamily: Typography.fontFamilyMedium },
-  meterValue: { color: C.textPrimary, fontSize: 13, fontWeight: '700', fontFamily: Typography.fontFamilyBold },
-  meterBackground: { height: 8, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.06)' },
+  meterLabel: { color: C.textSecondary, fontSize: TypeScale.micro + 1, fontFamily: Typography.fontFamilyMedium },
+  meterValue: { color: C.textPrimary, fontSize: TypeScale.micro + 1, fontWeight: '700', fontFamily: Typography.fontFamilyBold },
+  meterBackground: { height: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.06)' },
   meterFill: { height: '100%', borderRadius: 999 },
 });
 }
@@ -37,17 +34,32 @@ interface Props {
   theme: Theme;
 }
 
+type Scores = Props['scores'];
+
+/** Maps the current numbers to a QCore state and the one-line status Q shows above them. */
+export function coreStateFor(s: Scores): { state: QCoreState; text: string; tone: 'ok' | 'warn' | 'alert' | 'ai' } {
+  if (s.wellness === 0 && s.discipline === 0 && s.impulse === 0) return { state: 'analyzing', text: 'is reading your transactions', tone: 'ai' };
+  if (s.impulse >= 70) return { state: 'warning', text: 'noticed impulse activity', tone: 'alert' };
+  if (s.wellness >= 70) return { state: 'success', text: 'your behavior looks steady', tone: 'ok' };
+  return { state: 'insight', text: 'found where to improve', tone: 'warn' };
+}
+
 export default function WellnessCard({ scores, theme }: Props) {
   const C = theme || THEMES.azure;
   const styles = useMemo(() => createStyles(C), [C]);
+  const core = coreStateFor(scores);
   return (
-    <View style={[styles.glassCardHeavy, { padding: 24, marginBottom: 18, backgroundColor: C.glassStrong, borderColor: C.border }]}>
-      <Text style={[styles.cardHeaderTitle, { marginBottom: 22, color: C.textSecondary }]}>FINANCIAL WELLNESS</Text>
+    <Glass level={3} style={{ padding: 22, marginBottom: 18 }}>
+      <QStatus text={core.text} tone={core.tone} />
+      <Text style={[styles.cardHeaderTitle, { marginTop: 10, marginBottom: 18 }]}>Financial wellness</Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {/* Left Side: Circle */}
         <View style={styles.ringWrap}>
-          <CircularScoreCard score={scores.wellness} label="Score" color={getDynamicScoreColor(scores.wellness, 'higher_is_better', C)} size={100} />
+          <QCore state={core.state} size={112}>
+            <Text style={styles.coreScore}><AnimatedNumber value={scores.wellness} duration={1000} /></Text>
+            <Text style={styles.coreLabel}>Score</Text>
+          </QCore>
         </View>
 
         {/* Right Side: Meters */}
@@ -101,6 +113,6 @@ export default function WellnessCard({ scores, theme }: Props) {
           </View>
         </View>
       </View>
-    </View>
+    </Glass>
   );
 }

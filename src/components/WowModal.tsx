@@ -4,11 +4,7 @@ import { ParsedTransaction } from '../lib/smsParser';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Theme, THEMES } from '../theme/themes';
 
-const Typography = {
-  fontFamilyRegular: 'lato_regular',
-  fontFamilyMedium: 'lato_regular',
-  fontFamilyBold: 'lato_bold',
-};
+import { Typography } from '../theme/typography';
 
 function createStyles(C: Theme) {
   return StyleSheet.create({
