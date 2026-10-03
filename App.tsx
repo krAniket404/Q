@@ -1847,9 +1847,6 @@ export default function App() {
                           </View>
                           <View style={{ alignItems: 'flex-end' }}>
                             <Text style={styles.leakAmount}>₹{l.amount.toLocaleString('en-IN')}</Text>
-                            {l.isGhost && (
-                                <Text style={{ color: C.purple, fontSize: 9, fontWeight: '700', marginTop: 2 }}>GHOST DETECTED</Text>
-                            )}
                           </View>
                         </View>
                       ))}
@@ -1892,16 +1889,9 @@ export default function App() {
                           onPress={() => setExpandedCharge(isExpanded ? null : key)}
                         >
                           <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={styles.leakMerchant}>{l.merchant}</Text>
-                                {l.isGhost && (
-                                    <View style={{ backgroundColor: 'rgba(139,92,246,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ color: C.purple, fontSize: 8, fontWeight: '800' }}>GHOST</Text>
-                                    </View>
-                                )}
-                            </View>
+                            <Text style={styles.leakMerchant}>{l.merchant}</Text>
                             <Text style={styles.leakCount}>
-                                {l.isGhost ? "No 'Worth It' tags in 60d" : `Charged ${l.count} times · Tap to ${isExpanded ? 'hide' : 'expand'}`}
+                                Charged {l.count} times · Tap to {isExpanded ? 'hide' : 'expand'}
                             </Text>
                           </View>
                           <Text style={styles.leakAmount}>₹{l.amount.toLocaleString('en-IN')} total</Text>
