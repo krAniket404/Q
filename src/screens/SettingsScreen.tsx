@@ -1,4 +1,5 @@
 import React from 'react';
+import { onTabBarScroll } from '../components/FloatingTabBar';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Switch } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Theme, THEMES } from '../theme/themes';
@@ -35,7 +36,7 @@ export default function SettingsScreen({
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: C.bg }]} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[styles.container, { backgroundColor: C.bg }]} contentContainerStyle={{ paddingBottom: 150 }} onScroll={onTabBarScroll} scrollEventThrottle={16} showsVerticalScrollIndicator={false}>
       <Text style={[styles.headerTitle, { color: C.textPrimary }]}>Settings</Text>
 
       {/* Prestige Themes Card */}

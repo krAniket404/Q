@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { onTabBarScroll } from '../components/FloatingTabBar';
 import { View, Text, TextInput, StyleSheet, ScrollView, Animated, NativeModules, Modal, TouchableOpacity, FlatList } from 'react-native';
 import { ParsedTransaction } from '../lib/smsParser';
 import { predictBreachDate } from '../lib/behavioralEngine';
@@ -247,7 +248,7 @@ export default function BudgetsScreen({ transactions, theme }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 110, marginTop: 20 }} showsVerticalScrollIndicator={false}>
+      <ScrollView onScroll={onTabBarScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 150, marginTop: 20 }} showsVerticalScrollIndicator={false}>
         <Text style={styles.headerTitle}>Budgets</Text>
 
         {/* Hero Summary Card -- now actually wrapped in styles.heroCard,

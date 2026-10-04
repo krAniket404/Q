@@ -8,6 +8,7 @@ import WellnessCard, { coreStateFor } from '../src/components/WellnessCard';
 import { THEMES } from '../src/theme/themes';
 import { CoreStates, TypeScale } from '../src/theme/tokens';
 
+jest.setTimeout(30000); // first render after a cold Babel cache is slow
 beforeAll(() => { jest.useFakeTimers(); });
 afterAll(() => { jest.useRealTimers(); });
 

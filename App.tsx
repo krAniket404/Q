@@ -1,4 +1,5 @@
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import FloatingTabBar, { TabId, onTabBarScroll } from './src/components/FloatingTabBar';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, PermissionsAndroid, BackHandler,
@@ -1528,7 +1529,9 @@ export default function App() {
               tintColor={C.accent}
             />
           }
-          contentContainerStyle={{ paddingBottom: 80 }}
+          contentContainerStyle={{ paddingBottom: 150 }}
+          onScroll={onTabBarScroll}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
             <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -2251,13 +2254,7 @@ export default function App() {
       <WowModal visible={showWowModal} onClose={() => setShowWowModal(false)} transactions={transactions} scores={scores} recurringCharges={recurringCharges} monthlyForecast={monthlyForecast} theme={theme} />
       <MonthlyWrapModal visible={showMonthlyWrap} onClose={() => setShowMonthlyWrap(false)} scores={scores} wrapData={monthlyWrapData} wellnessColor={getDynamicScoreColor(scores.wellness, 'higher_is_better', theme)} theme={theme} />
 
-      <View style={styles.bottomNavContainer}>
-        <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab('dashboard')}><Icon name="view-dashboard-outline" size={24} color={activeTab === 'dashboard' ? C.accent : C.textSecondary} /><Text style={[styles.tabLabel, { color: activeTab === 'dashboard' ? C.accent : C.textSecondary }]}>Home</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab('transactions')}><Icon name="swap-horizontal" size={24} color={activeTab === 'transactions' ? C.accent : C.textSecondary} /><Text style={[styles.tabLabel, { color: activeTab === 'transactions' ? C.accent : C.textSecondary }]}>Spend</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab('budgets')}><Icon name="chart-pie" size={24} color={activeTab === 'budgets' ? C.accent : C.textSecondary} /><Text style={[styles.tabLabel, { color: activeTab === 'budgets' ? C.accent : C.textSecondary }]}>Budget</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab('coach')}><Icon name="robot-outline" size={24} color={activeTab === 'coach' ? C.accent : C.textSecondary} /><Text style={[styles.tabLabel, { color: activeTab === 'coach' ? C.accent : C.textSecondary }]}>Coach</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab('settings')}><Icon name="cog-outline" size={24} color={activeTab === 'settings' ? C.accent : C.textSecondary} /><Text style={[styles.tabLabel, { color: activeTab === 'settings' ? C.accent : C.textSecondary }]}>More</Text></TouchableOpacity>
-      </View>
+      <FloatingTabBar active={activeTab as TabId} onChange={(t) => setActiveTab(t)} theme={theme} />
     </View>
   );
 }
@@ -2328,8 +2325,5 @@ const styles = StyleSheet.create({
   quoteBox: { backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 16, marginBottom: 24, width: '100%' },
   quoteText: { color: "#FFFFFF", fontSize: 14, fontStyle: 'italic', textAlign: 'center' },
   quoteAuthor: { color: "#E0E0E0", fontSize: 12, textAlign: 'right', marginTop: 8 },
-  bottomNavContainer: { position: 'absolute', bottom: 20, left: 20, right: 20, height: 70, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, backgroundColor: 'rgba(20, 20, 25, 0.9)', borderRadius: 35, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.12)' },
-  tabButton: { flex: 1, justifyContent: 'center', alignItems: 'center', height: '100%' },
-  tabLabel: { fontSize: 10, fontWeight: '700', marginTop: 4, textTransform: 'uppercase' },
   activeDot: { width: 4, height: 4, borderRadius: 2, marginTop: 4 },
 });

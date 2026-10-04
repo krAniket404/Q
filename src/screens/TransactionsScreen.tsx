@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { onTabBarScroll } from '../components/FloatingTabBar';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput, ScrollView, Modal } from 'react-native';
 import { ParsedTransaction } from '../lib/smsParser';
 import { UserBehaviorModel, UserLabel } from '../lib/personalization';
@@ -174,7 +175,9 @@ export default function TransactionsScreen({
       <FlatList
         data={filteredTxns}
         keyExtractor={(item) => item.id!}
-        contentContainerStyle={{ paddingBottom: 120, paddingTop: 8 }}
+        contentContainerStyle={{ paddingBottom: 150, paddingTop: 8 }}
+        onScroll={onTabBarScroll}
+        scrollEventThrottle={16}
         renderItem={({ item }) => {
           const name = item.merchant || item.bank || '?';
           const firstLetter = name.charAt(0).toUpperCase();
