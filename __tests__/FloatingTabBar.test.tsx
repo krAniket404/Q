@@ -2,26 +2,13 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
 jest.setTimeout(30000);
-// Minimal stand-in for Reanimated: the real module needs the native runtime.
-jest.mock('react-native-reanimated', () => {
-  const { View } = require('react-native');
-  const mut = (v: any) => ({ value: v });
-  return {
-    __esModule: true,
-    default: { View },
-    makeMutable: mut,
-    useSharedValue: (v: any) => mut(v),
-    useDerivedValue: (fn: () => any) => ({ get value() { return fn(); } }),
-    useAnimatedStyle: (fn: () => any) => fn(),
-    useReducedMotion: () => false,
-    withSpring: (v: any) => v,
-    withTiming: (v: any) => v,
-  };
-});
 jest.mock('react-native-vector-icons/MaterialCommunityIcons', () => 'Icon');
 
-import FloatingTabBar, { onTabBarScroll, tabBarVisible, TAB_BAR_CLEARANCE } from '../src/components/FloatingTabBar';
+import FloatingTabBar, { getTabBarVisible, onTabBarScroll, setTabBarVisible, TAB_BAR_CLEARANCE } from '../src/components/FloatingTabBar';
 import { THEMES } from '../src/theme/themes';
+
+beforeAll(() => { jest.useFakeTimers(); });
+afterAll(() => { jest.useRealTimers(); });
 
 const scroll = (y: number) => ({ nativeEvent: { contentOffset: { y } } } as any);
 
@@ -42,15 +29,25 @@ test('renders five tabs and reports presses', async () => {
 });
 
 test('bar hides when scrolling down and returns when scrolling up', () => {
-  tabBarVisible.value = 1;
+  setTabBarVisible(1);
   onTabBarScroll(scroll(10));
   onTabBarScroll(scroll(200));
-  expect(tabBarVisible.value).toBe(0);
+  expect(getTabBarVisible()).toBe(0);
   onTabBarScroll(scroll(150));
-  expect(tabBarVisible.value).toBe(1);
+  expect(getTabBarVisible()).toBe(1);
   onTabBarScroll(scroll(400));
   onTabBarScroll(scroll(10));
-  expect(tabBarVisible.value).toBe(1);
+  expect(getTabBarVisible()).toBe(1);
+});
+
+test('hiding the bar drives the slide animation without errors', async () => {
+  let r: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(() => {
+    r = ReactTestRenderer.create(<FloatingTabBar active="coach" onChange={() => {}} theme={THEMES.q} />);
+  });
+  await ReactTestRenderer.act(() => { setTabBarVisible(0); jest.advanceTimersByTime(600); });
+  await ReactTestRenderer.act(() => { setTabBarVisible(1); jest.advanceTimersByTime(600); });
+  await ReactTestRenderer.act(() => r!.unmount());
 });
 
 test('content clearance is larger than the bar height', () => {

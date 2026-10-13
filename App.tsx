@@ -1,5 +1,10 @@
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import FloatingTabBar, { TabId, onTabBarScroll } from './src/components/FloatingTabBar';
+import Reveal from './src/components/Reveal';
+import HomeHeader from './src/components/home/HomeHeader';
+import SmartTrackingBanner from './src/components/home/SmartTrackingBanner';
+import QNoticed from './src/components/home/QNoticed';
+import PersonaCard from './src/components/home/PersonaCard';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, PermissionsAndroid, BackHandler,
@@ -1536,35 +1541,21 @@ export default function App() {
         >
             <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
               {/* Header */}
-              <View style={styles.headerRow}>
-                <View>
-                  <Text style={styles.greeting}>
-                    {(() => {
-                      const h = new Date().getHours();
-                      if (h < 12) return 'Good morning';
-                      if (h < 17) return 'Good afternoon';
-                      if (h < 22) return 'Good evening';
-                      return 'Working late?';
-                    })()}
-                  </Text>
-                  <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: '700', marginTop: 2 }}>
-                    MONTH SPEND: <Text style={{ color: C.accent }}>₹{monthlySpendTotal.toLocaleString('en-IN')}</Text>
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <TouchableOpacity
-                    style={[styles.syncPill, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)' }]}
-                    activeOpacity={0.8}
-                    onPress={() => setActiveTab('settings')}
-                  >
-                    <Icon name="tune-variant" size={18} color={C.textSecondary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.wrapButton} activeOpacity={0.8} onPress={() => setShowMonthlyWrap(true)}>
-                    <Icon name="gift-outline" size={16} color={C.textPrimary} />
-                    <Text style={styles.wrapButtonText}>Wrap</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <Reveal index={0}>
+                <HomeHeader
+                  greeting={(() => {
+                    const h = new Date().getHours();
+                    if (h < 12) return 'Good morning';
+                    if (h < 17) return 'Good afternoon';
+                    if (h < 22) return 'Good evening';
+                    return 'Working late?';
+                  })()}
+                  monthSpend={monthlySpendTotal}
+                  onSettings={() => setActiveTab('settings')}
+                  onWrap={() => setShowMonthlyWrap(true)}
+                  theme={theme}
+                />
+              </Reveal>
 
               {transactions.length === 0 && !isRefreshing && (
                 <View>
@@ -1574,17 +1565,9 @@ export default function App() {
               )}
 
               {!notifAccessEnabled && (
-                <TouchableOpacity
-                    onPress={requestNotificationAccess}
-                    style={{ backgroundColor: 'rgba(56,189,248,0.1)', padding: 16, borderRadius: 20, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(56,189,248,0.3)', flexDirection: 'row', alignItems: 'center', gap: 12 }}
-                >
-                    <Icon name="bell-ring-outline" size={24} color={C.accent} />
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: '700' }}>Enable Smart Tracking</Text>
-                        <Text style={{ color: C.textSecondary, fontSize: 12 }}>Capture transactions from GPay, PhonePe & more.</Text>
-                    </View>
-                    <Icon name="chevron-right" size={20} color={C.textSecondary} />
-                </TouchableOpacity>
+                <Reveal index={1}>
+                  <SmartTrackingBanner onPress={requestNotificationAccess} theme={theme} />
+                </Reveal>
               )}
 
               {/* Financial Wellness Card */}
@@ -1596,39 +1579,24 @@ export default function App() {
                   >
                     <Icon name="close-circle-outline" size={18} color={C.textSecondary} />
                   </TouchableOpacity>
-                  <WellnessCard scores={scores} theme={theme} />
+                  <Reveal index={2}><WellnessCard scores={scores} theme={theme} /></Reveal>
                 </View>
               )}
 
+              <Reveal index={3}>
+                <QNoticed transactions={transactions} theme={theme} onExplore={() => setShowWowModal(true)} />
+              </Reveal>
+
               {/* Financial Persona Card */}
               {pinnedFeatures.includes('persona') && (
-                <View style={[styles.glassCardHeavy, { padding: 20, marginBottom: 14, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.glassStrong, borderColor: theme.border }]}>
-                  <TouchableOpacity
-                    onPress={() => togglePin('persona')}
-                    style={{ position: 'absolute', right: 10, top: 10, zIndex: 10, opacity: 0.5 }}
-                  >
-                    <Icon name="close-circle-outline" size={18} color={theme.textSecondary} />
-                  </TouchableOpacity>
-                  <View style={[
-                    styles.personaIconBadge,
-                    {
-                      backgroundColor: `${behavioralProfile.persona.color}20`,
-                      borderColor: `${behavioralProfile.persona.color}50`,
-                      shadowColor: behavioralProfile.persona.color,
-                    },
-                  ]}>
-                    <Icon name={behavioralProfile.persona.icon} size={28} color={behavioralProfile.persona.color} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={[styles.personaLabel, { color: theme.textSecondary }]}>YOUR FINANCIAL PERSONA</Text>
-                    <Text style={[styles.personaName, { color: behavioralProfile.persona.color }]}>{behavioralProfile.persona.name}</Text>
-                    <Text style={[styles.personaDesc, { color: theme.textSecondary }]}>{behavioralProfile.persona.desc}</Text>
-                  </View>
-                </View>
+                <Reveal index={4}>
+                  <PersonaCard persona={behavioralProfile.persona} theme={theme} onClose={() => togglePin('persona')} />
+                </Reveal>
               )}
 
               {/* Dynamic Discipline Streaks Card */}
               {pinnedFeatures.includes('streaks') && (
+                <Reveal index={5}>
                 <View style={[styles.glassCard, { padding: 20, marginBottom: 14 }]}>
                   <TouchableOpacity
                     onPress={() => togglePin('streaks')}
@@ -1678,10 +1646,12 @@ export default function App() {
                     })
                   )}
                 </View>
+              </Reveal>
               )}
 
               {/* The 24-Hour Rule Card */}
               {pinnedFeatures.includes('vault') && (
+                <Reveal index={6}>
                 <View style={[styles.glassCard, { padding: 20, marginBottom: 14 }]}>
                   <TouchableOpacity
                     onPress={() => togglePin('vault')}
@@ -1734,10 +1704,12 @@ export default function App() {
                     })
                   )}
                 </View>
+              </Reveal>
               )}
 
               {/* Behavioral Heatmap */}
               {pinnedFeatures.includes('heatmap') && (
+                <Reveal index={7}>
                 <View style={[styles.glassCard, { padding: 20, marginBottom: 14 }]}>
                   <TouchableOpacity
                     onPress={() => togglePin('heatmap')}
@@ -1791,6 +1763,7 @@ export default function App() {
                     </View>
                   </View>
                 </View>
+              </Reveal>
               )}
 
               {/* Digital Subscriptions Card */}

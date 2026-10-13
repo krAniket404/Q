@@ -1,13 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  makeMutable, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withSpring, withTiming,
-} from 'react-native-reanimated';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Theme } from '../theme/themes';
 import { Typography } from '../theme/typography';
 import { TypeScale } from '../theme/tokens';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 export type TabId = 'dashboard' | 'transactions' | 'budgets' | 'coach' | 'settings';
 const TABS: { id: TabId; label: string; icon: string }[] = [
@@ -18,38 +15,51 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'settings', label: 'More', icon: 'cog-outline' },
 ];
 
-/** 1 = bar shown, 0 = bar tucked away. Screens drive it through `onTabBarScroll`. */
-export const tabBarVisible = makeMutable(1);
+// Bar visibility is shared state so any screen can drive it from its scroll handler.
+let visible = 1; // 1 = shown, 0 = tucked away
+const listeners = new Set<(v: number) => void>();
+export const getTabBarVisible = () => visible;
+export function setTabBarVisible(v: number) {
+  if (v === visible) { return; }
+  visible = v;
+  listeners.forEach(l => l(v));
+}
+
 let lastY = 0;
 /** Pass to a ScrollView/FlatList: hides the bar while reading down, brings it back on scroll up. */
 export function onTabBarScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
   const y = e.nativeEvent.contentOffset.y;
   const dy = y - lastY;
-  if (y < 40 || dy < -8) { if (tabBarVisible.value !== 1) tabBarVisible.value = 1; }
-  else if (dy > 8) { if (tabBarVisible.value !== 0) tabBarVisible.value = 0; }
+  if (y < 40 || dy < -8) { setTabBarVisible(1); } else if (dy > 8) { setTabBarVisible(0); }
   lastY = y;
 }
 
 export const TAB_BAR_CLEARANCE = 150; // bottom padding scroll content needs so nothing hides behind the bar
-
-const SPRING = { damping: 17, stiffness: 240, mass: 0.7 }; // slight overshoot, then settle
+const SPRING = { tension: 170, friction: 9, useNativeDriver: true }; // slight overshoot, then settle
+const FADE_STEPS = 8;
 
 function TabItem({ tab, active, color, onPress, reduce }: {
   tab: (typeof TABS)[number]; active: boolean; color: string; onPress: () => void; reduce: boolean;
 }) {
-  const press = useSharedValue(1);
-  const lift = useDerivedValue(() => (reduce ? (active ? -2 : 0) : withSpring(active ? -3 : 0, SPRING)));
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: press.value }, { translateY: lift.value }] }));
+  const press = useRef(new Animated.Value(1)).current;
+  const lift = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const to = active ? -3 : 0;
+    if (reduce) { lift.setValue(to); return undefined; }
+    const a = Animated.spring(lift, { toValue: to, ...SPRING });
+    a.start();
+    return () => a.stop();
+  }, [active, reduce, lift]);
   return (
     <Pressable
       accessibilityRole="tab"
       accessibilityLabel={tab.label}
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      onPressIn={() => { press.value = withTiming(0.9, { duration: 90 }); }}
-      onPressOut={() => { press.value = reduce ? 1 : withSpring(1, SPRING); }}
+      onPressIn={() => { Animated.timing(press, { toValue: 0.9, duration: 90, useNativeDriver: true }).start(); }}
+      onPressOut={() => { if (reduce) { press.setValue(1); } else { Animated.spring(press, { toValue: 1, ...SPRING }).start(); } }}
       style={styles.item}>
-      <Animated.View style={[styles.itemInner, style]}>
+      <Animated.View style={[styles.itemInner, { transform: [{ scale: press }, { translateY: lift }] }]}>
         <Icon name={tab.icon} size={24} color={color} />
         <Text style={[styles.label, { color, fontFamily: active ? Typography.fontFamilyBold : Typography.fontFamilyMedium }]}>{tab.label}</Text>
       </Animated.View>
@@ -58,33 +68,46 @@ function TabItem({ tab, active, color, onPress, reduce }: {
 }
 
 export default function FloatingTabBar({ active, onChange, theme }: { active: TabId; onChange: (t: TabId) => void; theme: Theme }) {
-  const reduce = useReducedMotion();
+  const reduce = useReduceMotion();
   const [w, setW] = useState(0);
   const index = TABS.findIndex(t => t.id === active);
   const itemW = w / TABS.length;
+  const x = useRef(new Animated.Value(0)).current;
+  const slide = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => { tabBarVisible.value = 1; }, [active]); // a new screen always starts with the bar visible
+  useEffect(() => { setTabBarVisible(1); }, [active]); // a new screen always starts with the bar visible
 
-  const x = useDerivedValue(() => (reduce ? index * itemW : withSpring(index * itemW, SPRING)));
-  const indicator = useAnimatedStyle(() => ({ width: itemW, transform: [{ translateX: x.value }] }));
-  const slide = useDerivedValue(() => (reduce ? (tabBarVisible.value ? 0 : 140) : withSpring(tabBarVisible.value ? 0 : 140, { damping: 20, stiffness: 200 })));
-  const wrap = useAnimatedStyle(() => ({ transform: [{ translateY: slide.value }] }));
+  useEffect(() => {
+    if (reduce) { x.setValue(index * itemW); return undefined; }
+    const a = Animated.spring(x, { toValue: index * itemW, ...SPRING });
+    a.start();
+    return () => a.stop();
+  }, [index, itemW, reduce, x]);
+
+  useEffect(() => {
+    const apply = (v: number) => {
+      const to = v ? 0 : 140;
+      if (reduce) { slide.setValue(to); return; }
+      Animated.spring(slide, { toValue: to, tension: 120, friction: 12, useNativeDriver: true }).start();
+    };
+    listeners.add(apply);
+    return () => { listeners.delete(apply); };
+  }, [reduce, slide]);
 
   return (
-    <Animated.View style={[styles.wrap, wrap]} pointerEvents="box-none">
+    <Animated.View style={[styles.wrap, { transform: [{ translateY: slide }] }]} pointerEvents="box-none">
       {/* Soft fade so content never collides with the bar */}
-      <Svg style={styles.fade} pointerEvents="none" width="100%" height={150}>
-        <Defs>
-          <LinearGradient id="f" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={theme.bg} stopOpacity={0} />
-            <Stop offset="0.55" stopColor={theme.bg} stopOpacity={0.88} />
-            <Stop offset="1" stopColor={theme.bg} stopOpacity={0.98} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="150" fill="url(#f)" />
-      </Svg>
+      <View style={styles.fade} pointerEvents="none">
+        {Array.from({ length: FADE_STEPS }).map((_, i) => (
+          <View key={i} style={{ flex: 1, backgroundColor: theme.bg, opacity: ((i + 1) / FADE_STEPS) * 0.97 }} />
+        ))}
+      </View>
       <View style={[styles.bar, { borderColor: theme.border }]} accessibilityRole="tablist" onLayout={(e: LayoutChangeEvent) => setW(e.nativeEvent.layout.width)}>
-        {w > 0 && <Animated.View pointerEvents="none" style={[styles.indicator, indicator]}><View style={[styles.pill, { backgroundColor: theme.glassStrong }]} /></Animated.View>}
+        {w > 0 && (
+          <Animated.View pointerEvents="none" style={[styles.indicator, { width: itemW, transform: [{ translateX: x }] }]}>
+            <View style={[styles.pill, { backgroundColor: theme.glassStrong }]} />
+          </Animated.View>
+        )}
         {TABS.map(t => (
           <TabItem key={t.id} tab={t} reduce={reduce} active={t.id === active}
             color={t.id === active ? theme.accent : theme.textSecondary} onPress={() => onChange(t.id)} />
@@ -96,7 +119,7 @@ export default function FloatingTabBar({ active, onChange, theme }: { active: Ta
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 150, justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 14 },
-  fade: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  fade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 150 },
   bar: { flexDirection: 'row', height: 66, borderRadius: 33, borderWidth: 1, backgroundColor: 'rgba(16,16,15,0.96)', overflow: 'hidden', elevation: 8, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   itemInner: { alignItems: 'center', justifyContent: 'center' },

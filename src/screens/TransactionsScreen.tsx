@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { onTabBarScroll } from '../components/FloatingTabBar';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, TextInput, ScrollView, Modal } from 'react-native';
+import RhythmDial from '../components/spend/RhythmDial';
+import { groupByDay } from '../lib/groupByDay';
+import { TypeScale } from '../theme/tokens';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Modal, SectionList } from 'react-native';
 import { ParsedTransaction } from '../lib/smsParser';
 import { UserBehaviorModel, UserLabel } from '../lib/personalization';
-import { detectAnomaly } from '../lib/anomalyDetector';
 import { Typography } from '../theme/typography';
 import { Theme, THEMES } from '../theme/themes';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -59,6 +61,19 @@ function createStyles(C: Theme) {
   txnMerchant: { color: C.textPrimary, fontSize: 15, fontWeight: '700', marginBottom: 3, fontFamily: Typography.fontFamilyBold },
   txnCategory: { color: C.textSecondary, fontSize: 12, fontFamily: Typography.fontFamilyRegular },
   txnAmount: { fontSize: 15, fontWeight: '800', fontFamily: Typography.fontFamilyBold },
+
+  // Day-by-day list (open canvas, hairlines instead of cards)
+  dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: 26, paddingBottom: 8 },
+  dayTitle: { color: C.textPrimary, fontSize: TypeScale.label, fontFamily: Typography.fontFamilyBold },
+  dayTotal: { color: C.textSecondary, fontSize: TypeScale.micro + 1, fontFamily: Typography.fontFamilyMedium },
+  row: { flexDirection: 'row', alignItems: 'center', minHeight: 68, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarTxt: { fontSize: 16, fontFamily: Typography.fontFamilyBold },
+  rowMerchant: { color: C.textPrimary, fontSize: TypeScale.body, fontFamily: Typography.fontFamilyBold },
+  rowSub: { color: C.textSecondary, fontSize: TypeScale.micro + 1, marginTop: 2, fontFamily: Typography.fontFamilyRegular },
+  rowAmount: { fontSize: TypeScale.body, letterSpacing: -0.3, fontFamily: Typography.fontFamilyBold },
+  rowTag: { fontSize: TypeScale.micro - 1, marginTop: 2, fontFamily: Typography.fontFamilyBold },
+  menuBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
 
   // Action Buttons
   txnActionRow: {
@@ -137,92 +152,84 @@ export default function TransactionsScreen({
     return matchesSearch && matchesCategory;
   });
 
+  const sections = useMemo(() => groupByDay(filteredTxns), [filteredTxns]);
+  const fmtTime = (v: any) => { const d = new Date(v); const h = d.getHours(); return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+
   return (
     <View style={{ flex: 1, marginTop: 20 }}>
-      <Text style={styles.headerTitle}>Transactions</Text>
-      <Text style={styles.subtleText}>{filteredTxns.length} found</Text>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Icon name="magnify" size={20} color="#666" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search merchants…"
-          placeholderTextColor="#555"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      {/* Category Chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipScrollView}
-        contentContainerStyle={{ paddingRight: 24 }}
-      >
-        {categories.map(cat => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.chip, activeFilter === cat && styles.chipActive]}
-            onPress={() => setActiveFilter(cat)}
-          >
-            <Text style={[styles.chipText, activeFilter === cat && styles.chipTextActive]}>{cat}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <FlatList
-        data={filteredTxns}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id!}
-        contentContainerStyle={{ paddingBottom: 150, paddingTop: 8 }}
+        stickySectionHeadersEnabled={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 150 }}
         onScroll={onTabBarScroll}
         scrollEventThrottle={16}
-        renderItem={({ item }) => {
-          const name = item.merchant || item.bank || '?';
-          const firstLetter = name.charAt(0).toUpperCase();
-          const category = item.category || (item.type === 'credit' ? 'Income' : 'Other');
-          // Use category color for debits, Income color for credits
-          const accentColor = item.type === 'credit' ? CAT_COLORS.Income : (CAT_COLORS[category] || CAT_COLORS.Other);
+        ListHeaderComponent={
+          <View>
+            <Text style={styles.headerTitle}>Spend</Text>
+            <Text style={styles.subtleText}>{filteredTxns.length} transactions</Text>
 
+            <RhythmDial transactions={transactions} theme={C} />
+
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <Icon name="magnify" size={20} color={C.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search merchants…"
+                placeholderTextColor={C.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+
+            {/* Category Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScrollView} contentContainerStyle={{ paddingRight: 24 }}>
+              {categories.map(cat => (
+                <TouchableOpacity key={cat} style={[styles.chip, activeFilter === cat && styles.chipActive]} onPress={() => setActiveFilter(cat)}>
+                  <Text style={[styles.chipText, activeFilter === cat && styles.chipTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        }
+        ListEmptyComponent={<Text style={[styles.subtleText, { marginTop: 24 }]}>No transactions match.</Text>}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.dayHeader}>
+            <Text style={styles.dayTitle}>{section.title}</Text>
+            {section.total > 0 ? <Text style={styles.dayTotal}>₹{section.total.toLocaleString('en-IN')} spent</Text> : null}
+          </View>
+        )}
+        renderItem={({ item, index, section }) => {
+          const name = item.merchant || item.bank || '?';
+          const category = item.category || (item.type === 'credit' ? 'Income' : 'Other');
+          const accentColor = item.type === 'credit' ? CAT_COLORS.Income : (CAT_COLORS[category] || CAT_COLORS.Other);
           const isLabeled = labeledTxnIds.includes(item.id!);
           const isWorthIt = worthItTxnIds.includes(item.id!);
           const isEmergency = (emergencyTxnIds || []).includes(item.id!);
+          const last = index === section.data.length - 1;
 
           return (
-            <View style={[styles.txnCard, isEmergency && { borderColor: C.danger, backgroundColor: 'rgba(239,68,68,0.03)' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {/* AVATAR WITH FIRST LETTER & CATEGORY COLOR */}
-                <View style={[styles.txnIconBadge, { backgroundColor: `${accentColor}20` }]}>
-                  <Text style={[styles.avatarText, { color: accentColor }]}>{firstLetter}</Text>
-                </View>
-
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.txnMerchant} numberOfLines={1}>{name}</Text>
-                  <Text style={styles.txnCategory}>{category} • {new Date(item.date).toLocaleDateString()}</Text>
-                </View>
-
-                <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                  <Text style={[styles.txnAmount, { color: item.type === 'credit' ? C.success : C.textPrimary }]}>
-                    {item.type === 'credit' ? '+' : '-'}₹{Math.round(item.amount).toLocaleString('en-IN')}
-                  </Text>
-                  {/* Subtle Label indicator */}
-                  {isLabeled && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                         <Icon name={isWorthIt ? 'check-circle' : 'flash'} size={12} color={isWorthIt ? C.success : C.danger} />
-                         <Text style={{ fontSize: 10, color: isWorthIt ? C.success : C.danger, fontWeight: '700' }}>{isWorthIt ? 'WORTH IT' : 'IMPULSE'}</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Meatball Menu (Fix #1) */}
-                <TouchableOpacity
-                    onPress={() => setActiveMenuTxn(item)}
-                    style={{ padding: 4, marginLeft: 10 }}
-                >
-                    <Icon name="dots-vertical" size={22} color={C.textSecondary} />
-                </TouchableOpacity>
+            <View style={[styles.row, last && { borderBottomWidth: 0 }, isEmergency && { borderLeftWidth: 2, borderLeftColor: C.danger, paddingLeft: 10 }]}>
+              <View style={[styles.avatar, { backgroundColor: `${accentColor}1F` }]}>
+                <Text style={[styles.avatarTxt, { color: accentColor }]}>{name.charAt(0).toUpperCase()}</Text>
               </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={styles.rowMerchant} numberOfLines={1}>{name}</Text>
+                <Text style={styles.rowSub} numberOfLines={1}>{category} · {fmtTime(item.date)}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.rowAmount, { color: item.type === 'credit' ? C.success : C.textPrimary }]}>
+                  {item.type === 'credit' ? '+' : '−'}₹{Math.round(item.amount).toLocaleString('en-IN')}
+                </Text>
+                {isLabeled ? (
+                  <Text style={[styles.rowTag, { color: isWorthIt ? C.success : C.danger }]}>{isWorthIt ? 'Worth it' : 'Impulse'}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Options for ${name}`} onPress={() => setActiveMenuTxn(item)} style={styles.menuBtn}>
+                <Icon name="dots-vertical" size={22} color={C.textSecondary} />
+              </TouchableOpacity>
             </View>
           );
         }}

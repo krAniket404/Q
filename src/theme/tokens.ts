@@ -27,12 +27,12 @@ export type QCoreState = 'idle' | 'analyzing' | 'noticed' | 'warning' | 'insight
 export const CoreStates: Record<QCoreState, {
   color: string; spinMs: number; pulseMs: number; pulseAmp: number; halo: [number, number]; jitter: number;
 }> = {
-  idle:      { color: Palette.ink,     spinMs: 22000, pulseMs: 3200, pulseAmp: 0.02, halo: [0.05, 0.1],  jitter: 0 },
-  analyzing: { color: Palette.ink,     spinMs: 5000,  pulseMs: 1400, pulseAmp: 0.04, halo: [0.06, 0.14], jitter: 0 },
-  noticed:   { color: Palette.ink,     spinMs: 16000, pulseMs: 1200, pulseAmp: 0.07, halo: [0.1, 0.22],  jitter: 0 },
-  warning:   { color: Palette.red,     spinMs: 9000,  pulseMs: 700,  pulseAmp: 0.03, halo: [0.1, 0.24],  jitter: 1.5 },
-  insight:   { color: Palette.silver,  spinMs: 90000, pulseMs: 4000, pulseAmp: 0.01, halo: [0.08, 0.12], jitter: 0 },
-  success:   { color: Palette.emerald, spinMs: 14000, pulseMs: 2600, pulseAmp: 0.09, halo: [0.12, 0.28], jitter: 0 },
+  idle:      { color: Palette.ink,     spinMs: 22000, pulseMs: 3200, pulseAmp: 0.02, halo: [0.03, 0.06],  jitter: 0 },
+  analyzing: { color: Palette.ink,     spinMs: 5000,  pulseMs: 1400, pulseAmp: 0.04, halo: [0.04, 0.09], jitter: 0 },
+  noticed:   { color: Palette.ink,     spinMs: 16000, pulseMs: 1200, pulseAmp: 0.07, halo: [0.05, 0.12],  jitter: 0 },
+  warning:   { color: Palette.red,     spinMs: 9000,  pulseMs: 700,  pulseAmp: 0.03, halo: [0.08, 0.2],  jitter: 1.5 },
+  insight:   { color: Palette.silver,  spinMs: 90000, pulseMs: 4000, pulseAmp: 0.01, halo: [0.03, 0.06], jitter: 0 },
+  success:   { color: Palette.emerald, spinMs: 14000, pulseMs: 2600, pulseAmp: 0.09, halo: [0.1, 0.22], jitter: 0 },
 };
 
 // Spring feel used on the website (overshoot then settle).
