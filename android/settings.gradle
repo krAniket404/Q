@@ -1,4 +1,9 @@
-pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+pluginManagement {
+    System.setProperty("ANDROID_USER_HOME", "C:/android_home")
+    System.setProperty("user.home", "C:/android_home")
+    System.setProperty("android.prefs.root", "C:/android_home")
+    includeBuild("../node_modules/@react-native/gradle-plugin")
+}
 plugins { id("com.facebook.react.settings") }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'Q'

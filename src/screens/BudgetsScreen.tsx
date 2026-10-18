@@ -6,6 +6,10 @@ import { predictBreachDate } from '../lib/behavioralEngine';
 import { Typography } from '../theme/typography';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Theme, THEMES } from '../theme/themes';
+import PaceHero from '../components/budget/PaceHero';
+import CategoryTowers from '../components/budget/CategoryTowers';
+import Reveal from '../components/Reveal';
+import { TypeScale } from '../theme/tokens';
 
 const { SmsModule } = NativeModules;
 
@@ -30,6 +34,9 @@ const STORAGE_KEY = 'budgets:v1';
 
 function createStyles(C: Theme) {
   return StyleSheet.create({
+  towerSection: { marginBottom: 34 },
+  sectionHead: { color: C.textPrimary, fontSize: 22, letterSpacing: -0.5, marginBottom: 12, fontFamily: Typography.fontFamilyBold },
+  sectionHint: { color: C.textSecondary, fontSize: TypeScale.micro + 1, marginBottom: 6, fontFamily: Typography.fontFamilyRegular },
   headerTitle: { color: C.textPrimary, fontSize: 28, fontWeight: '900', letterSpacing: -0.5, marginBottom: 24 },
 
   glassCard: {
@@ -65,11 +72,8 @@ function createStyles(C: Theme) {
 
   sectionTitle: { color: C.textSecondary, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 16, marginLeft: 4 },
 
-  budgetCard: {
-    backgroundColor: C.glass, borderColor: C.border, borderTopColor: C.glassHighlight,
-    borderWidth: 1, borderRadius: 20, padding: 18, marginBottom: 14,
-    shadowColor: C.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 3,
-  },
+  // Open row with a hairline, not a boxed card.
+  budgetCard: { paddingVertical: 16, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: C.border },
   budgetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   // Category icon now sits in a colored circular badge (tinted to that
   // category's own color) instead of floating as bare emoji text --
@@ -78,7 +82,7 @@ function createStyles(C: Theme) {
     width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginRight: 10,
   },
   // categoryIcon style removed - using Icon component now
-  categoryName: { color: C.textPrimary, fontSize: 15, fontWeight: '700' },
+  categoryName: { color: C.textPrimary, fontSize: TypeScale.body, fontFamily: Typography.fontFamilyBold },
   overBadge: {
     marginLeft: 8, backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 6,
     paddingHorizontal: 6, paddingVertical: 2,
@@ -92,15 +96,15 @@ function createStyles(C: Theme) {
   currencySymbol: { color: C.textSecondary, fontSize: 14, fontWeight: 'bold', marginRight: 4 },
   budgetInput: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold', paddingVertical: 8, minWidth: 60, textAlign: 'right' },
 
-  spentText: { fontSize: 12, fontWeight: '700', marginBottom: 8 },
-  budgetProgressBg: { height: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
+  spentText: { fontSize: TypeScale.micro + 1, fontFamily: Typography.fontFamilyBold, marginBottom: 8 },
+  budgetProgressBg: { height: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
   budgetProgressFill: { height: '100%', borderRadius: 999 },
 
   // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'flex-end',
+    justify: 'flex-end',
   },
   modalContent: {
     backgroundColor: C.glassStrong,
@@ -116,7 +120,7 @@ function createStyles(C: Theme) {
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justify: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
     marginBottom: 20,
@@ -136,7 +140,7 @@ function createStyles(C: Theme) {
   // closeButton style removed - using Icon component now
   modalTxnRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justify: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: 1,
@@ -251,80 +255,36 @@ export default function BudgetsScreen({ transactions, theme }: Props) {
       <ScrollView onScroll={onTabBarScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 150, marginTop: 20 }} showsVerticalScrollIndicator={false}>
         <Text style={styles.headerTitle}>Budgets</Text>
 
-        {/* Hero Summary Card -- now actually wrapped in styles.heroCard,
-            which was defined but unused before (the section was floating
-            without its intended glass container). */}
-        <View style={styles.heroCard}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <View style={{ flex: 1, marginRight: 16 }}>
-              <Text style={styles.heroLabel}>TOTAL BUDGET</Text>
-              <Text style={styles.heroAmount}>₹{totalBudget.toLocaleString('en-IN')}</Text>
-              <Text style={styles.heroSubtext}>For {monthName}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end', marginLeft: 16 }}>
-              <Text style={styles.heroLabel}>REMAINING</Text>
-              <Text style={[styles.heroAmount, { color: remaining >= 0 ? C.success : C.danger }]}>
-                ₹{Math.abs(remaining).toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.heroSubtext}>{remaining >= 0 ? 'Left to spend' : 'Over budget'}</Text>
-            </View>
-          </View>
+        <Reveal index={0}>
+          <PaceHero
+            totalBudget={totalBudget}
+            totalSpent={totalSpent}
+            daysLeft={daysLeft}
+            daysInMonth={daysInMonth}
+            elapsed={(now.getDate() - 1 + now.getHours() / 24) / daysInMonth}
+            monthName={monthName}
+            theme={C}
+          />
+        </Reveal>
 
-          <View style={styles.heroProgressBg}>
-            <View style={[
-              styles.heroProgressFill,
-              { width: `${totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0}%` }
-            ]} />
+        <Reveal index={1}>
+          <View style={styles.towerSection}>
+            <Text style={styles.sectionHead}>Where it went</Text>
+            <CategoryTowers
+              categories={sortedCategories}
+              spent={spent}
+              budgets={budgets}
+              colors={CAT_COLORS}
+              icons={CAT_ICONS}
+              theme={C}
+              onSelect={(c) => setViewingCategory(c)}
+            />
           </View>
-          <Text style={styles.heroSpentText}>
-            Spent ₹{Math.round(totalSpent).toLocaleString('en-IN')} of ₹{totalBudget.toLocaleString('en-IN')}
-          </Text>
-
-          <View style={styles.paceRow}>
-            <Text style={styles.paceText}>
-              {daysLeft} day{daysLeft === 1 ? '' : 's'} left
-            </Text>
-            <Text style={styles.paceDivider}>·</Text>
-            <Text style={[styles.paceText, { color: remaining >= 0 ? C.accent : C.danger }]}>
-              {remaining >= 0
-                ? `₹${Math.round(dailyAllowance).toLocaleString('en-IN')}/day to stay on track`
-                : 'Already over for the month'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Category Breakdown */}
-        <View style={styles.glassCard}>
-          <Text style={styles.cardHeaderTitle}>CATEGORY BREAKDOWN</Text>
-          <View style={styles.stackedBar}>
-            {sortedCategories.map((cat) => {
-              const val = spent[cat] || 0;
-              const pct = totalSpent > 0 ? (val / totalSpent) * 100 : 0;
-              if (pct === 0) return null;
-              return <View key={cat} style={{ width: `${pct}%`, height: 10, backgroundColor: CAT_COLORS[cat] || C.textSecondary }} />;
-            })}
-          </View>
-
-          <View style={styles.legendContainer}>
-            {sortedCategories.map((cat) => {
-              const hasSpend = (spent[cat] || 0) > 0;
-              return (
-                <View key={cat} style={styles.legendRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={[styles.legendDot, { backgroundColor: CAT_COLORS[cat] || C.textSecondary, opacity: hasSpend ? 1 : 0.35 }]} />
-                    <Text style={[styles.legendText, { opacity: hasSpend ? 1 : 0.5 }]}>{cat}</Text>
-                  </View>
-                  <Text style={[styles.legendValue, { opacity: hasSpend ? 1 : 0.5 }]}>
-                    ₹{Math.round(spent[cat] || 0).toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
+        </Reveal>
 
         {/* Monthly Limits */}
-        <Text style={styles.sectionTitle}>MONTHLY LIMITS · TAP TO VIEW TRANSACTIONS</Text>
+        <Text style={[styles.sectionHead, { marginTop: 10 }]}>Monthly limits</Text>
+        <Text style={styles.sectionHint}>Edit a limit here. Tap a category to see its transactions.</Text>
 
         {sortedCategories.map(category => {
           const spentAmount = spent[category] || 0;
@@ -442,7 +402,7 @@ function BudgetCard({
           <Text style={styles.categoryName}>{category}</Text>
           {isOver && (
             <View style={styles.overBadge}>
-              <Text style={styles.overBadgeText}>OVER</Text>
+              <Text style={styles.overBadgeText}>Over</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -462,11 +422,11 @@ function BudgetCard({
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <Text style={[styles.spentText, { color: progressColor, marginBottom: 0 }]}>
-            {percent.toFixed(0)}% Used · ₹{Math.round(spentAmount).toLocaleString('en-IN')} / ₹{budgetAmount.toLocaleString('en-IN')}
+            {percent.toFixed(0)}% used · ₹{Math.round(spentAmount).toLocaleString('en-IN')} of ₹{budgetAmount.toLocaleString('en-IN')}
         </Text>
         {breachDate && !isOver && (
-            <Text style={{ color: C.warning, fontSize: 10, fontWeight: '700' }}>
-                ⚠️ BREACH {breachDate.toUpperCase()}
+            <Text style={{ color: C.warning, fontSize: TypeScale.micro, fontFamily: Typography.fontFamilyBold }}>
+                Likely over by {breachDate}
             </Text>
         )}
       </View>

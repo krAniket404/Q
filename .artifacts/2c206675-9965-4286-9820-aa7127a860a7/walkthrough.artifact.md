@@ -1,31 +1,25 @@
-# Walkthrough - Spend Stage 3 Integration (`spend-stage3-ALL`)
+# Walkthrough - Coach Stage 5 Integration (`coach-stage5-ALL`)
 
-All files from `spend-stage3-ALL` have been integrated into their proper project locations in **CentiQ**.
+All files from `coach-stage5-ALL` have been integrated into their proper project locations in **CentiQ**.
 
 ---
 
 ## File Placement & Integration Summary
 
-1. **`src/theme/tokens.ts`** → [`src/theme/tokens.ts`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/theme/tokens.ts)
-   - Shared design tokens (`Palette`, `TypeScale`, `GlassLevels`, `CoreStates`, `Spring`).
+1. **`src/lib/coachFacts.ts`** → [`src/lib/coachFacts.ts`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/lib/coachFacts.ts)
+   - `buildFacts`: Extracts facts directly from the user's transaction history (*total count*, *busiest hour*, *top category percentage*, *7-day trend against daily average*, *late night purchase count & average*).
 
-2. **`src/lib/rhythm.ts`** → [`src/lib/rhythm.ts`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/lib/rhythm.ts)
-   - `lastMonthDebits`, `windowStats`, `busiestHour`, `formatHour`, `isLateNight`, `hourOf` helper functions for the Rhythm Dial.
+2. **`src/components/coach/DiagnosticSteps.tsx`** → [`src/components/coach/DiagnosticSteps.tsx`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/components/coach/DiagnosticSteps.tsx)
+   - Diagnostic step-by-step indicator showing the exact data facts Q is analyzing before generating the Coach's answer.
 
-3. **`src/lib/groupByDay.ts`** → [`src/lib/groupByDay.ts`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/lib/groupByDay.ts)
-   - `groupByDay`: Groups transactions by day (Today, Yesterday, Date) with daily total debit calculations for SectionList rendering.
+3. **`src/screens/AICoachScreen.tsx`** → [`src/screens/AICoachScreen.tsx`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/screens/AICoachScreen.tsx)
+   - Updated `AICoachScreen` featuring `QStatus`, `Reveal` entrance animations, `DiagnosticSteps` during response generation, and `buildFacts` data integration.
 
-4. **`src/components/spend/RhythmDial.tsx`** → [`src/components/spend/RhythmDial.tsx`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/components/spend/RhythmDial.tsx)
-   - Interactive 24-hour clock dial component placing every purchase dot at the hour made, with gesture panning and impulse window stats.
-
-5. **`src/screens/TransactionsScreen.tsx`** → [`src/screens/TransactionsScreen.tsx`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/src/screens/TransactionsScreen.tsx)
-   - Updated `TransactionsScreen` using `SectionList` with `groupByDay` daily headers, `RhythmDial` in `ListHeaderComponent`, search filtering, category chips, and action modals.
-
-6. **`__tests__/SpendStage3.test.tsx`** → [`__tests__/SpendStage3.test.tsx`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/__tests__/SpendStage3.test.tsx)
-   - Unit tests covering `formatHour`, `busiestHour`, `windowStats`, `groupByDay`, `RhythmDial`, and `TransactionsScreen`.
+4. **`__tests__/CoachStage5.test.tsx`** → [`__tests__/CoachStage5.test.tsx`](file:///C:/Users/Sherly%20Sanjana.A/CentiQ/__tests__/CoachStage5.test.tsx)
+   - Unit tests covering `buildFacts`, `DiagnosticSteps`, and `AICoachScreen` empty/diagnostic/answering states.
 
 ---
 
 ## Verification Results
 
-- Static analysis executed across all 6 files — **0 errors or warnings**.
+- Static analysis executed across all 4 files — **0 errors or warnings**.

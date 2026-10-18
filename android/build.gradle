@@ -1,3 +1,7 @@
+System.setProperty("ANDROID_USER_HOME", "C:/android_home")
+System.setProperty("user.home", "C:/android_home")
+System.setProperty("android.prefs.root", "C:/android_home")
+
 buildscript {
     ext {
         buildToolsVersion = "36.0.0"

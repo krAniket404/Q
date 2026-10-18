@@ -3,6 +3,13 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Keyboard
 import { ParsedTransaction } from '../lib/smsParser';
 import { Theme, THEMES } from '../theme/themes';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import QCore from '../components/QCore';
+import QStatus from '../components/QStatus';
+import Reveal from '../components/Reveal';
+import DiagnosticSteps from '../components/coach/DiagnosticSteps';
+import { buildFacts } from '../lib/coachFacts';
+import { Typography } from '../theme/typography';
+import { TypeScale } from '../theme/tokens';
 
 const { SmsModule } = NativeModules;
 const SESSIONS_STORAGE_KEY = 'centiq_chat_sessions_v2'; // New key to reset old chats
@@ -84,6 +91,7 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
   const [isFetchingData, setIsFetchingData] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const facts = useMemo(() => buildFacts(transactions), [transactions]);
 
   useEffect(() => {
     const loadSessions = async () => {
@@ -298,7 +306,10 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
         <TouchableOpacity onPress={() => setShowHistory(true)} style={styles.iconButton}>
           <Icon name="history" size={22} color={C.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Q Coach</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <QCore state={isLoading ? 'analyzing' : messages.length ? 'insight' : 'idle'} size={40} />
+          <Text style={[styles.headerTitle, { marginLeft: 8 }]}>Q Coach</Text>
+        </View>
         <TouchableOpacity onPress={startNewChat} style={styles.iconButton}>
           <Icon name="pencil-plus-outline" size={22} color={C.textSecondary} />
         </TouchableOpacity>
@@ -331,22 +342,31 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
       )}
 
       {messages.length === 0 ? (
-        <View style={styles.emptyStateContainer}>
-          <View style={styles.emptyStateAvatar}>
-            <Icon name="robot-outline" size={40} color={C.accent} />
-          </View>
-          <Text style={styles.emptyStateTitle}>Meet your Q Coach</Text>
-          <Text style={styles.emptyStateText}>Sarcastic, funny, and knows your spending habits better than you do.</Text>
-
-          <View style={styles.suggestionsWrapper}>
-            {SUGGESTED_QUESTIONS.map((q, i) => (
-              <TouchableOpacity key={i} style={styles.suggestedChip} onPress={() => sendMessage(q.text)}>
-                <Icon name={q.icon} size={14} color={C.accent} style={{ marginRight: 6 }} />
-                <Text style={styles.suggestedChipText}>{q.text}</Text>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 4, paddingBottom: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <Reveal index={0}>
+            <View style={{ marginTop: 22, marginBottom: 14 }}>
+              <QCore state="idle" size={104} />
+              <Text style={{ color: C.textPrimary, fontSize: 40, letterSpacing: -1.6, lineHeight: 44, marginTop: 22, fontFamily: Typography.fontFamilyBold }}>Ask Q why.</Text>
+              <Text style={{ color: C.textSecondary, fontSize: TypeScale.body, lineHeight: 25, marginTop: 8, fontFamily: Typography.fontFamilyRegular }}>
+                Sarcastic, funny, and knows your spending habits better than you do.
+              </Text>
+            </View>
+          </Reveal>
+          {SUGGESTED_QUESTIONS.map((q, i) => (
+            <Reveal key={q.text} index={i + 1}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={q.text}
+                onPress={() => sendMessage(q.text)}
+                activeOpacity={0.6}
+                style={{ flexDirection: 'row', alignItems: 'center', minHeight: 60, borderTopWidth: 1, borderTopColor: C.border }}>
+                <Icon name={q.icon} size={20} color={C.accent} style={{ marginRight: 14 }} />
+                <Text style={{ flex: 1, color: C.textPrimary, fontSize: TypeScale.body + 1, fontFamily: Typography.fontFamilyMedium }}>{q.text}</Text>
+                <Icon name="arrow-top-right" size={18} color={C.textSecondary} />
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+            </Reveal>
+          ))}
+        </ScrollView>
       ) : (
         <FlatList
           ref={flatListRef}
@@ -354,18 +374,23 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
           keyExtractor={(item, index) => index.toString()}
           contentContainerStyle={{ paddingHorizontal: 4, paddingBottom: 20 }}
           renderItem={({ item }) => (
-            <View style={[styles.messageBubble, item.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-              <Text style={item.role === 'user' ? styles.userText : styles.aiText}>{item.content}</Text>
-            </View>
+            item.role === 'user' ? (
+              <View style={{ alignSelf: 'flex-end', maxWidth: '84%', marginTop: 22, marginBottom: 6 }}>
+                <Text style={{ color: C.textSecondary, fontSize: TypeScale.body + 1, lineHeight: 25, textAlign: 'right', fontFamily: Typography.fontFamilyMedium }}>{item.content}</Text>
+              </View>
+            ) : (
+              <Reveal>
+                <View style={{ paddingTop: 16, marginTop: 8, borderTopWidth: 1, borderTopColor: C.border }}>
+                  <QStatus text="diagnosis" tone="ai" />
+                  <Text style={{ color: C.textPrimary, fontSize: TypeScale.body + 2, lineHeight: 28, marginTop: 12, fontFamily: Typography.fontFamilyRegular }}>{item.content}</Text>
+                </View>
+              </Reveal>
+            )
           )}
         />
       )}
 
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={C.accent} size="small" />
-        </View>
-      )}
+      {isLoading && <DiagnosticSteps facts={facts} theme={C} />}
 
       {/* Fix Input Hidden behind bar: margin-bottom and extra space */}
       <View style={[styles.inputWrapper, { marginBottom: Platform.OS === 'ios' ? 40 : 110, paddingHorizontal: 16, backgroundColor: C.bg }]}>
