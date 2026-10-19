@@ -10,6 +10,7 @@ import DiagnosticSteps from '../components/coach/DiagnosticSteps';
 import { buildFacts } from '../lib/coachFacts';
 import { Typography } from '../theme/typography';
 import { TypeScale } from '../theme/tokens';
+import { buildRiskProfile } from '../ml/riskProfile';
 
 const { SmsModule } = NativeModules;
 const SESSIONS_STORAGE_KEY = 'centiq_chat_sessions_v2'; // New key to reset old chats
@@ -23,6 +24,7 @@ interface Props {
 }
 
 const SUGGESTED_QUESTIONS = [
+  { text: "What are my peak ML risk hours?", icon: "clock-alert-outline" },
   { text: "Roast my spending habits", icon: "fire" },
   { text: "Why is my impulse score high?", icon: "flash-outline" },
   { text: "Give me a harsh saving tip", icon: "piggy-bank-outline" },
@@ -137,6 +139,14 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
     const monthlyCredit = transactions.filter(t => t.type === 'credit' && t.date.getMonth() === now.getMonth() && t.date.getFullYear() === now.getFullYear()).reduce((a, b) => a + b.amount, 0);
     const savedThisMonth = Math.round(monthlyCredit - monthlyDebit);
 
+    if (msg.includes('risk') || msg.includes('peak') || msg.includes('window') || msg.includes('hours')) {
+      const profile = buildRiskProfile(transactions);
+      if (profile.windows.length > 0) {
+        const w = profile.windows[0];
+        return `My ML model analyzed your last ${profile.historyDays} days: your top spending risk window is ${w.label}, accounting for ~${Math.round(w.share * 100)}% of your weekly spending (₹${Math.round(w.expected).toLocaleString('en-IN')}). Consider locking non-essentials during those hours! ⏰`;
+      }
+      return "I don't have enough debit history yet to build an ML risk profile for you (need at least 15 debit transactions across 14 days). Keep using the app and check back soon! 📈";
+    }
     if (msg.includes('roast')) return `Your spending habits? Let's just say your wallet is crying right now. You dropped ₹${Math.round(totalSpend).toLocaleString('en-IN')} overall. Your favorite hobby seems to be making ${topCat} richer by ₹${topCatAmount.toLocaleString('en-IN')}. Stop swiping your card like it's a magic wand! 🔥`;
     if (msg.includes('discipline') || msg.includes('improve')) return `Your Discipline score is ${scores.discipline}/100. To improve it, stop pretending you "need" another hoodie. Try making your weekly spending consistent instead of splurging every payday like a monarch on payday. 👑`;
     if (msg.includes('impulse') || msg.includes('impulsive')) {

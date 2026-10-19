@@ -36,6 +36,10 @@ import WellnessCard from './src/components/WellnessCard';
 import MonthlyWrapModal from './src/components/MonthlyWrapModal';
 import { supabase } from './src/lib/supabase';
 import { THEMES, Theme } from './src/theme/themes';
+import { defaultPrefs, NotificationPrefs, sanitizePrefs } from './src/ml/notificationPrefs';
+import { FeedbackState, recordOutcome, Outcome } from './src/ml/feedback';
+import { buildRiskProfile } from './src/ml/riskProfile';
+import { planNotifications, NotificationAction } from './src/ml/notificationPlanner';
 
 const { SmsModule } = NativeModules;
 const STORAGE_KEY = 'centiq_state_v1';
@@ -88,6 +92,8 @@ export default function App() {
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(defaultPrefs());
+  const [feedbackState, setFeedbackState] = useState<FeedbackState>({});
 
   const theme = THEMES[currentThemeId] || THEMES.q;
   const C = theme; // Backward compatibility for existing UI
@@ -742,6 +748,8 @@ export default function App() {
       if (parsed.merchantMap) setMerchantMap(parsed.merchantMap);
       if (parsed.currentThemeId) setCurrentThemeId(parsed.currentThemeId);
       if (parsed.isBiometricEnabled) setIsBiometricEnabled(parsed.isBiometricEnabled);
+      if (parsed.notificationPrefs) setNotificationPrefs(sanitizePrefs(parsed.notificationPrefs));
+      if (parsed.feedbackState) setFeedbackState(parsed.feedbackState);
 
       if (Array.isArray(parsed.transactions)) {
         const hydratedTxns = parsed.transactions.map((t: any) => ({
@@ -777,8 +785,21 @@ export default function App() {
       merchantMap: overrides.merchantMap ?? merchantMap,
       currentThemeId: overrides.currentThemeId ?? currentThemeId,
       isBiometricEnabled: overrides.isBiometricEnabled ?? isBiometricEnabled,
+      notificationPrefs: overrides.notificationPrefs ?? notificationPrefs,
+      feedbackState: overrides.feedbackState ?? feedbackState,
     };
     try { await SmsModule.saveData(STORAGE_KEY, JSON.stringify(payload)); } catch (e) {}
+  };
+
+  const handleNotificationAction = (action: NotificationAction, key: string) => {
+    let outcome: Outcome = 'opened';
+    if (action === 'hold_24h') outcome = 'acted';
+    else if (action === 'snooze') outcome = 'snoozed';
+    else if (action === 'not_helpful') outcome = 'not_helpful';
+
+    const updatedFeedback = recordOutcome(feedbackState, key, outcome, Date.now());
+    setFeedbackState(updatedFeedback);
+    saveState({ feedbackState: updatedFeedback });
   };
 
   const resetAppData = async () => {
@@ -1584,7 +1605,13 @@ export default function App() {
               )}
 
               <Reveal index={3}>
-                <QNoticed transactions={transactions} theme={theme} onExplore={() => setShowWowModal(true)} />
+                <QNoticed
+                  transactions={transactions}
+                  theme={theme}
+                  onExplore={() => setShowWowModal(true)}
+                  worthItTxnIds={worthItTxnIds}
+                  onAction={handleNotificationAction}
+                />
               </Reveal>
 
               {/* Financial Persona Card */}
@@ -2146,6 +2173,8 @@ export default function App() {
           isBiometricEnabled={isBiometricEnabled}
           setIsBiometricEnabled={(v) => { setIsBiometricEnabled(v); saveState({ isBiometricEnabled: v }); }}
           theme={theme}
+          notificationPrefs={notificationPrefs}
+          setNotificationPrefs={(prefs) => { setNotificationPrefs(prefs); saveState({ notificationPrefs: prefs }); }}
         />
       )}
 

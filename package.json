@@ -7,7 +7,9 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "backtest": "npx ts-node --transpile-only --project tools/ml/tsconfig.json tools/ml/backtest.ts",
+    "export-synthetic": "npx ts-node --transpile-only --project tools/ml/tsconfig.json tools/ml/export_synthetic.ts"
   },
   "dependencies": {
     "@react-native-firebase/app": "^26.2.0",

@@ -3,6 +3,7 @@ import { onTabBarScroll } from '../components/FloatingTabBar';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Switch } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Theme, THEMES } from '../theme/themes';
+import { NotificationPrefs, Sensitivity, NotificationKind, KIND_LABELS, defaultPrefs } from '../ml/notificationPrefs';
 
 interface Props {
   mode: 'strict' | 'liberal' | null;
@@ -16,11 +17,14 @@ interface Props {
   isBiometricEnabled: boolean;
   setIsBiometricEnabled: (v: boolean) => void;
   theme: Theme;
+  notificationPrefs?: NotificationPrefs;
+  setNotificationPrefs?: (prefs: NotificationPrefs) => void;
 }
 
 export default function SettingsScreen({
   mode, setMode, resetAppData, userLabels, pinnedFeatures, togglePin,
-  currentThemeId, setTheme, isBiometricEnabled, setIsBiometricEnabled, theme
+  currentThemeId, setTheme, isBiometricEnabled, setIsBiometricEnabled, theme,
+  notificationPrefs = defaultPrefs(), setNotificationPrefs
 }: Props) {
   const C = theme;
 
@@ -33,6 +37,12 @@ export default function SettingsScreen({
         { text: "Clear", style: "destructive", onPress: () => resetAppData() }
       ]
     );
+  };
+
+  const updatePrefs = (updater: (prev: NotificationPrefs) => NotificationPrefs) => {
+    if (setNotificationPrefs) {
+      setNotificationPrefs(updater(notificationPrefs));
+    }
   };
 
   return (
@@ -58,6 +68,70 @@ export default function SettingsScreen({
             </TouchableOpacity>
           ))}
         </ScrollView>
+      </View>
+
+      {/* ML Notification Brain Controls */}
+      <View style={[styles.glassCard, { padding: 20, marginBottom: 16, borderColor: C.border }]}>
+        <Text style={[styles.cardHeaderTitle, { color: C.textSecondary }]}>ML NOTIFICATION BRAIN</Text>
+        <Text style={[styles.subtext, { color: C.textSecondary }]}>Configure proactive risk window heads-ups, sensitivity, and quiet hours.</Text>
+
+        <View style={styles.settingRow}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: '700' }}>Enable Proactive Alerts</Text>
+            <Text style={{ color: C.textSecondary, fontSize: 11, marginTop: 2 }}>Allow Q to predict peak spending hours</Text>
+          </View>
+          <Switch
+            value={notificationPrefs.enabled}
+            onValueChange={v => updatePrefs(p => ({ ...p, enabled: v }))}
+            trackColor={{ false: '#333', true: C.accent }}
+            thumbColor={notificationPrefs.enabled ? '#FFF' : '#AAA'}
+          />
+        </View>
+
+        {notificationPrefs.enabled && (
+          <>
+            <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>Alert Types</Text>
+              {(Object.keys(KIND_LABELS) as NotificationKind[]).map(kind => (
+                <View key={kind} style={styles.subSettingRow}>
+                  <Text style={{ color: C.textSecondary, fontSize: 12, flex: 1 }}>{KIND_LABELS[kind]}</Text>
+                  <Switch
+                    value={notificationPrefs.kinds[kind]}
+                    onValueChange={v => updatePrefs(p => ({ ...p, kinds: { ...p.kinds, [kind]: v } }))}
+                    trackColor={{ false: '#333', true: C.accent }}
+                    thumbColor={notificationPrefs.kinds[kind] ? '#FFF' : '#AAA'}
+                  />
+                </View>
+              ))}
+            </View>
+
+            <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 6 }}>Model Sensitivity</Text>
+              <Text style={{ color: C.textSecondary, fontSize: 11, marginBottom: 10 }}>Controls how confident Q must be before speaking up.</Text>
+
+              <View style={styles.modeRow}>
+                {(['low', 'normal', 'high'] as Sensitivity[]).map(s => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.modeButton, notificationPrefs.sensitivity === s && { backgroundColor: C.accent }]}
+                    onPress={() => updatePrefs(p => ({ ...p, sensitivity: s }))}
+                  >
+                    <Text style={[styles.modeButtonText, { color: notificationPrefs.sensitivity === s ? '#FFFFFF' : C.textSecondary }]}>
+                      {s.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 }}>
+              <Text style={{ color: C.textPrimary, fontSize: 13, fontWeight: '700', marginBottom: 4 }}>Quiet Hours</Text>
+              <Text style={{ color: C.textSecondary, fontSize: 11 }}>
+                Currently set to {notificationPrefs.quiet.startHour}:00 - {notificationPrefs.quiet.endHour}:00. No notifications will fire during these hours.
+              </Text>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Security Card */}
@@ -176,14 +250,16 @@ const styles = StyleSheet.create({
   },
   cardHeaderTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 16, textTransform: 'uppercase' },
   subtext: { fontSize: 12, marginBottom: 16, lineHeight: 18 },
+  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  subSettingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   profileRow: { flexDirection: 'row', alignItems: 'center' },
   avatarBox: { width: 44, height: 44, borderRadius: 12, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   avatarText: { fontSize: 18, fontWeight: 'bold' },
   profileName: { fontSize: 16, fontWeight: '600' },
   profileMeta: { fontSize: 12, marginTop: 2 },
   modeRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
-  modeButton: { flex: 1, flexDirection: 'row', paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  modeButtonText: { fontSize: 13, fontWeight: '700' },
+  modeButton: { flex: 1, flexDirection: 'row', paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modeButtonText: { fontSize: 12, fontWeight: '700' },
   pinRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
   dangerButton: { backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginTop: 8 },
   dangerButtonText: { fontSize: 14, fontWeight: 'bold' },
