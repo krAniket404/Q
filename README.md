@@ -92,6 +92,11 @@ If you're having issues getting the above steps to work, see the [Troubleshootin
 
 To learn more about React Native, take a look at the following resources:
 
+
+Important ML/logistic regression model features
+<img width="1422" height="682" alt="image" src="https://github.com/user-attachments/assets/9d0c8bbd-789f-42bf-91f9-740d9236111d" />
+
+
 - [React Native Website](https://reactnative.dev) - learn more about React Native.
 - [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
 - [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
