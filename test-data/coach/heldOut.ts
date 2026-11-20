@@ -1,0 +1,26 @@
+import { Intent } from '../../../src/coach/types';
+// Written separately from the training examples, in different words, to measure generalisation.
+export const HELD_OUT: [Intent, string][] = [
+  ['total_spend', "what's the damage this month"], ['total_spend', 'how much cash have I burned on food'], ['total_spend', 'tell me how much I spent at zomato in september'], ['total_spend', 'spending on cabs last week?'], ['total_spend', 'how much did all my shopping cost me'], ['total_spend', 'what have I spent today'], ['total_spend', 'give me my total spend for the past 7 days'], ['total_spend', 'money I put into groceries this month'], ['total_spend', 'how much did I fork out for entertainment'], ['total_spend', 'what did I spend yesterday'],
+  ['top_categories', "what's eating most of my budget"], ['top_categories', 'break my money down by category please'], ['top_categories', 'which type of expense is the highest'], ['top_categories', 'what do I mostly spend on'], ['top_categories', 'show categories sorted by spend'], ['top_categories', 'biggest bucket of spending?'],
+  ['top_merchants', 'which merchants do I pay the most'], ['top_merchants', 'where do I spend the most money at'], ['top_merchants', 'what shop takes the most from me'], ['top_merchants', 'my most expensive merchants'],
+  ['biggest_purchases', "what's the most I've paid for one thing"], ['biggest_purchases', 'single biggest payment this month'], ['biggest_purchases', 'show me my top 3 transactions'], ['biggest_purchases', 'what was the priciest purchase last week'],
+  ['compare_periods', 'am I overspending compared to last month'], ['compare_periods', 'spend this week against last week'], ['compare_periods', 'did I do better than last month'], ["compare_periods", "how's this month looking next to last month"], ['compare_periods', 'october versus september spending'],
+  ['month_forecast', 'where am I headed by month end'], ['month_forecast', 'will my spending cross my budget by the end of the month'], ['month_forecast', "what's my projected total"], ['month_forecast', 'how much will this month cost me'], ['month_forecast', 'going to overshoot this month?'],
+  ['daily_average', 'how much do I spend in a normal day'], ['daily_average', 'my average spend each day'], ['daily_average', 'daily burn rate'], ['daily_average', "what's my usual daily expense"],
+  ['merchant_count', 'how often have I ordered from zomato'], ['merchant_count', 'count my uber rides'], ['merchant_count', 'how many swiggy orders have I placed this month'], ['merchant_count', 'number of orders at amazon'],
+  ['subscriptions', 'what recurring bills do I have'], ['subscriptions', "list the subscriptions I'm paying for"], ['subscriptions', 'how much do I spend on subscriptions in a year'], ['subscriptions', 'which monthly payments repeat'],
+  ['income_savings', 'how much did I manage to save'], ['income_savings', "what's my income"], ['income_savings', "what's my savings percentage"], ['income_savings', 'how much money did I receive'],
+  ['when_spend', 'at what hour do I spend the most'], ['when_spend', 'which weekday costs me the most'], ['when_spend', 'when do I splurge'], ['when_spend', 'what time of day do I buy things'],
+  ['explain_change', "why's my spending so high this month"], ['explain_change', "what's making me spend more"], ['explain_change', 'reason my expenses increased'], ['explain_change', 'why did my spend drop'],
+  ['safe_to_spend', 'can I splurge 4000 on headphones'], ['safe_to_spend', 'how much can I safely spend daily'], ['safe_to_spend', 'is 1500 okay to spend'], ['safe_to_spend', "what's left to spend each day"],
+  ['budget_status', 'am I within my budgets'], ['budget_status', 'which budget did I blow'], ['budget_status', 'how much of my limit have I used'], ['budget_status', 'are any of my budgets exceeded'],
+  ['impulse', 'why do I buy stuff on impulse'], ['impulse', "what's behind my high impulse score"], ['impulse', 'do I shop impulsively'], ['impulse', 'how impulsive are my purchases'],
+  ['persona', "what's my spender personality"], ['persona', 'which spender type fits me'], ['persona', 'describe my money persona'], ['persona', "what's my persona called"],
+  ['score_explain', 'why is my financial score so low'], ['score_explain', 'how do I make my score better'], ['score_explain', "what's pulling my score down"], ['score_explain', 'explain my discipline number'],
+  ['roast', 'roast my money habits'], ['roast', 'go ahead and roast me'], ['roast', 'be savage about my spending'], ['roast', 'make fun of me'],
+  ['saving_tip', 'how do I save more money'], ['saving_tip', 'give me some advice on saving'], ['saving_tip', 'suggest a way to cut costs'], ['saving_tip', "what's one tip to save"],
+  ['joke', 'tell me something funny'], ['joke', 'do you know any jokes'], ['joke', 'make a money joke'], ['joke', 'I need a laugh'],
+  ['help', 'what can I do here'], ['help', 'what should I ask'], ['help', 'what are you capable of'], ['help', 'help me use this'],
+];
+export const OFF_TOPIC = ["what's the weather like", 'who won the cricket match', 'tell me about black holes', 'how do I bake a cake', 'translate hello into french', "what's the capital of france", 'how tall is mount everest', 'write me a poem about the sea', 'who is the prime minister', 'what is the meaning of life'];

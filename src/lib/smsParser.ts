@@ -9,6 +9,25 @@ export interface ParsedTransaction {
   category?: string;
 }
 
+/** Masks credit card numbers, bank account digits, UPI handles, and phone numbers in raw SMS bodies or prompts. */
+export function sanitizeSensitiveDetails(text: string): string {
+  if (!text) return text;
+  return text
+    // Mask 12-16 digit card/account numbers -> XXXX-XXXX-XXXX-1234
+    .replace(/\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?(\d{4})\b/g, 'XXXX-XXXX-XXXX-$1')
+    // Mask Account / A/c numbers like A/C XX1234 -> A/C XXXX
+    .replace(/\b(A\/C|ACCT|ACCOUNT|CARD|NO\.?)\s*([X\*]*\d{1,4})/gi, '$1 XXXX')
+    // Mask 10-digit phone numbers -> XXXXXX1234
+    .replace(/\b\d{6}(\d{4})\b/g, 'XXXXXX$1')
+    // Mask VPA handles with digits -> userXXXX@upi
+    .replace(/\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+)\b/g, (match, domain) => {
+      const parts = match.split('@');
+      const user = parts[0];
+      const maskedUser = user.length > 3 ? user.substring(0, 2) + '***' + user.slice(-1) : '***';
+      return `${maskedUser}@${domain}`;
+    });
+}
+
 export function parseBankSMS(smsBody: string, smsDate: number): ParsedTransaction | null {
   let amount = 0;
   let bank = 'Unknown Bank';
@@ -141,7 +160,7 @@ export function parseBankSMS(smsBody: string, smsDate: number): ParsedTransactio
   }
 
   const date = new Date(smsDate);
-  return { amount, date, bank, raw: smsBody, type, merchant };
+  return { amount, date, bank, raw: sanitizeSensitiveDetails(smsBody), type, merchant };
 }
 
 /**

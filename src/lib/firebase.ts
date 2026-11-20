@@ -99,7 +99,12 @@ export const signUp = async (email: string, password: string) => {
         console.warn("Firestore Profile Creation Failed:", e);
       }
 
-      return userCredential;
+      return {
+        user: {
+          uid: userCredential.user?.uid || '',
+          email: userCredential.user?.email || cleanEmail
+        }
+      };
     } catch (e: any) {
       console.warn("Firebase Auth SignUp error:", e?.code, e?.message);
       firebaseError = e;
@@ -146,7 +151,15 @@ export const signIn = async (email: string, password: string) => {
 
   if (authInst && typeof authInst.signInWithEmailAndPassword === 'function') {
     try {
-      return await authInst.signInWithEmailAndPassword(cleanEmail, password);
+      const userCredential = await authInst.signInWithEmailAndPassword(cleanEmail, password);
+      if (userCredential?.user) {
+        return {
+          user: {
+            uid: userCredential.user.uid,
+            email: userCredential.user.email || cleanEmail,
+          }
+        };
+      }
     } catch (e: any) {
       console.warn("Firebase Auth SignIn error:", e?.code, e?.message);
       firebaseError = e;
@@ -160,6 +173,9 @@ export const signIn = async (email: string, password: string) => {
   });
 
   if (error) {
+    if (error.message?.includes("Email not confirmed")) {
+      throw new Error("Email not confirmed. Please check your inbox or confirm your account.");
+    }
     throw firebaseError && firebaseError.code ? firebaseError : error;
   }
 
@@ -169,6 +185,18 @@ export const signIn = async (email: string, password: string) => {
       email: data.user?.email || cleanEmail,
     }
   };
+};
+
+export const signOutUser = async () => {
+  try {
+    const authInst = getFirebaseAuth();
+    if (authInst && typeof authInst.signOut === 'function') {
+      await authInst.signOut();
+    }
+  } catch (e) {}
+  try {
+    await supabase.auth.signOut();
+  } catch (e) {}
 };
 
 // Utility to split large operations into batches

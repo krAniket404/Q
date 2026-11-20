@@ -71,3 +71,27 @@ test('Coach: empty state, asking a question, diagnosis, answer', async () => {
   expect(t).not.toContain('Writing the answer');
   await ReactTestRenderer.act(() => r!.unmount());
 });
+
+// ---- the engine now sits behind the Coach screen ----
+test('Coach screen: a specific question gets a computed answer, not a generic list', async () => {
+  NativeModules.SmsModule = { loadData: jest.fn().mockResolvedValue(null), saveData: jest.fn().mockResolvedValue(undefined) };
+  const AICoachScreen = require('../src/screens/AICoachScreen').default;
+  const scores = { discipline: 40, impulse: 72, volatility: 30, wellness: 60, savingsRate: 10 };
+  const now = new Date();
+  const mk = (daysAgo: number, amount: number, merchant: string, category: string) => { const d = new Date(now); d.setDate(d.getDate() - daysAgo); d.setHours(13, 0, 0, 0); return { id: `${merchant}${daysAgo}`, type: 'debit', amount, date: d, merchant, category } as any; };
+  const txs = [mk(0, 100, 'Uber', 'Travel'), mk(1, 250, 'Uber', 'Travel'), mk(2, 40, 'Chai', 'Food'), mk(3, 900, 'Amazon', 'Shopping'), mk(4, 60, 'Uber', 'Travel'), mk(5, 70, 'Chai', 'Food'), mk(6, 80, 'Chai', 'Food')];
+  let r: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => { r = ReactTestRenderer.create(<AICoachScreen transactions={txs} scores={scores} theme={THEMES.q} />); await Promise.resolve(); await Promise.resolve(); });
+  await ReactTestRenderer.act(async () => { jest.advanceTimersByTime(1500); await Promise.resolve(); });
+  const input = r!.root.findAll(n => n.props.placeholder === 'Ask me anything...')[0];
+  await ReactTestRenderer.act(async () => { input.props.onChangeText('how many times did I use uber'); await Promise.resolve(); });
+  const send = r!.root.findAll(n => typeof n.props.onPress === 'function' && n.props.disabled !== true && JSON.stringify(n.props.style ?? '').includes('sendButton'))[0]
+    || r!.root.findAll(n => n.props.accessibilityLabel === 'Send message')[0];
+  expect(send).toBeTruthy();
+  await ReactTestRenderer.act(async () => { send.props.onPress(); await Promise.resolve(); await Promise.resolve(); });
+  await ReactTestRenderer.act(async () => { jest.advanceTimersByTime(2000); await Promise.resolve(); await Promise.resolve(); });
+  const t = allText(r!);
+  expect(t).toContain('Uber: 3 times');                // computed from the data above
+  expect(t).toContain('₹410');                         // 100 + 250 + 60
+  await ReactTestRenderer.act(() => r!.unmount());
+});

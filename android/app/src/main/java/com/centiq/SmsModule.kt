@@ -10,12 +10,25 @@ import com.facebook.react.bridge.*
 import androidx.core.content.ContextCompat
 import android.content.Intent
 import android.app.PendingIntent
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import android.view.WindowManager
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager
 import androidx.fragment.app.FragmentActivity
-import java.util.concurrent.Executor
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+
+    private val KEY_ALIAS = "centiq_master_key"
+    private val ANDROID_KEYSTORE = "AndroidKeyStore"
+    private val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
+    private val ENC_PREFIX = "ENC:"
 
     override fun getName(): String = "SmsModule"
 
@@ -28,6 +41,60 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     override fun initialize() {
         super.initialize()
         ReactContextSingleton.reactContext = reactApplicationContext
+    }
+
+    private fun getOrCreateSecretKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE)
+        keyStore.load(null)
+        if (!keyStore.containsAlias(KEY_ALIAS)) {
+            val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+            val keyGenSpec = KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build()
+            keyGenerator.init(keyGenSpec)
+            return keyGenerator.generateKey()
+        }
+        val entry = keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry
+        return entry.secretKey
+    }
+
+    private fun encryptData(plainText: String): String {
+        val secretKey = getOrCreateSecretKey()
+        val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+        val iv = cipher.iv
+        val encryptedBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+        val combined = ByteArray(iv.size + encryptedBytes.size)
+        System.arraycopy(iv, 0, combined, 0, iv.size)
+        System.arraycopy(encryptedBytes, 0, combined, iv.size, encryptedBytes.size)
+        return ENC_PREFIX + Base64.encodeToString(combined, Base64.NO_WRAP)
+    }
+
+    private fun decryptData(cipherText: String): String {
+        if (!cipherText.startsWith(ENC_PREFIX)) {
+            // Legacy unencrypted data fallback
+            return cipherText
+        }
+        val rawBase64 = cipherText.substring(ENC_PREFIX.length)
+        val combined = Base64.decode(rawBase64, Base64.NO_WRAP)
+        val ivSize = 12 // GCM Standard IV size
+        if (combined.size <= ivSize) return cipherText
+
+        val iv = ByteArray(ivSize)
+        val encryptedBytes = ByteArray(combined.size - ivSize)
+        System.arraycopy(combined, 0, iv, 0, ivSize)
+        System.arraycopy(combined, ivSize, encryptedBytes, 0, encryptedBytes.size)
+
+        val secretKey = getOrCreateSecretKey()
+        val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+        val decryptedBytes = cipher.doFinal(encryptedBytes)
+        return String(decryptedBytes, Charsets.UTF_8)
     }
 
     @ReactMethod
@@ -60,17 +127,15 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     @ReactMethod
     fun saveData(key: String, value: String, promise: Promise) {
         try {
-            android.util.Log.d("SmsModule", "Saving data for key: $key (length: ${value.length})")
+            val encryptedValue = encryptData(value)
             val prefs = reactApplicationContext.getSharedPreferences("centiq_prefs", Context.MODE_PRIVATE)
-            val success = prefs.edit().putString(key, value).commit() // Use commit() for immediate write confirmation in debug
+            val success = prefs.edit().putString(key, encryptedValue).commit()
             if (success) {
                 promise.resolve(true)
             } else {
-                android.util.Log.e("SmsModule", "SharedPreferences commit failed for key: $key")
-                promise.reject("SAVE_FAILED", "Failed to commit to SharedPreferences")
+                promise.reject("SAVE_FAILED", "Failed to commit to encrypted storage")
             }
         } catch (e: Exception) {
-            android.util.Log.e("SmsModule", "Exception saving data: ${e.message}")
             promise.reject("SAVE_ERROR", e)
         }
     }
@@ -78,14 +143,37 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
     @ReactMethod
     fun loadData(key: String, promise: Promise) {
         try {
-            android.util.Log.d("SmsModule", "Loading data for key: $key")
             val prefs = reactApplicationContext.getSharedPreferences("centiq_prefs", Context.MODE_PRIVATE)
-            val data = prefs.getString(key, null)
-            android.util.Log.d("SmsModule", "Data loaded for key: $key (found: ${data != null})")
-            promise.resolve(data)
+            val rawData = prefs.getString(key, null)
+            if (rawData == null) {
+                promise.resolve(null)
+            } else {
+                val decrypted = decryptData(rawData)
+                promise.resolve(decrypted)
+            }
         } catch (e: Exception) {
-            android.util.Log.e("SmsModule", "Exception loading data: ${e.message}")
             promise.reject("LOAD_ERROR", e)
+        }
+    }
+
+    @ReactMethod
+    fun setScreenSecurity(enable: Boolean, promise: Promise) {
+        try {
+            val activity = currentActivity
+            if (activity != null) {
+                activity.runOnUiThread {
+                    if (enable) {
+                        activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                    promise.resolve(true)
+                }
+            } else {
+                promise.resolve(false)
+            }
+        } catch (e: Exception) {
+            promise.reject("SECURITY_ERROR", e)
         }
     }
 
@@ -240,13 +328,10 @@ class SmsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaMod
             })
 
         val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock CentiQ")
+            .setTitle("Unlock Q")
             .setSubtitle("Secure your financial data")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
 
-        // Android API requirement: setNegativeButtonText must NOT be called if DEVICE_CREDENTIAL is allowed.
-        // The system will provide its own "Use PIN/Password" or "Cancel" button.
-        
         val promptInfo = promptInfoBuilder.build()
 
         activity.runOnUiThread {

@@ -30,3 +30,9 @@ npx jest __tests__/MLBrain.test.ts
 npx ts-node --transpile-only --project tools/ml/tsconfig.json tools/ml/backtest.ts
 npx ts-node --transpile-only --project tools/ml/tsconfig.json tools/ml/export_synthetic.ts
 ```
+
+## Not built yet (needs native Android work and screens)
+- Scheduling many alarms at exact times (the app can currently schedule one fixed daily reminder).
+- A notification settings screen.
+- Capturing taps on notification buttons ("Hold 24h", "Snooze", "Not helpful") and feeding them to `feedback.ts`.
+- Rescheduling after a phone restart.

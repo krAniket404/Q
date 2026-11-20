@@ -3,7 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityInd
 import { signIn, signUp } from '../lib/firebase';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-export default function AuthScreen() {
+interface Props {
+  onAuthSuccess?: (user: any) => void;
+}
+
+export default function AuthScreen({ onAuthSuccess }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,6 +18,9 @@ export default function AuthScreen() {
     const code = e.code || e.status || "";
     const msg = e.message || e.error_description || "";
 
+    if (msg.includes("Email not confirmed")) {
+      return "Email not confirmed. Please check your email inbox to confirm your account, or log in with confirmed credentials.";
+    }
     if (msg.includes("Invalid login credentials") || code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
       return "Incorrect email or password. If you don't have an account yet, tap 'Sign Up' below!";
     }
@@ -51,17 +58,33 @@ export default function AuthScreen() {
             "Please check your email inbox to confirm your account, or log in now.",
             [{ text: "OK", onPress: () => setIsSignUp(false) }]
           );
-        } else {
+        } else if (result?.user) {
           Alert.alert("Welcome! 🎉", "Account created successfully!");
+          if (onAuthSuccess) {
+            onAuthSuccess(result.user);
+          }
         }
       } else {
-        await signIn(email.trim(), password);
+        const result: any = await signIn(email.trim(), password);
+        if (result?.user && onAuthSuccess) {
+          onAuthSuccess(result.user);
+        }
       }
     } catch (e: any) {
-      console.log("Auth Message:", e?.message || e?.code);
+      console.log("Auth Error:", e?.message || e?.code);
       Alert.alert(isSignUp ? "Sign Up Error" : "Login Error", getFriendlyErrorMessage(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGuestLogin = () => {
+    const guestUser = {
+      uid: 'guest_user',
+      email: 'guest@q.app'
+    };
+    if (onAuthSuccess) {
+      onAuthSuccess(guestUser);
     }
   };
 
@@ -70,7 +93,7 @@ export default function AuthScreen() {
       <View style={styles.logoContainer}>
         <Text style={styles.logoText}>Q</Text>
       </View>
-      <Text style={styles.title}>CentiQ</Text>
+      <Text style={styles.title}>Q</Text>
       <Text style={styles.subtitle}>Understand why you spend, not just where.</Text>
 
       {/* Log In / Sign Up Mode Switcher */}
@@ -116,6 +139,11 @@ export default function AuthScreen() {
         )}
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.guestButton} onPress={handleGuestLogin} disabled={loading}>
+        <Icon name="incognito" size={18} color="#38BDF8" style={{ marginRight: 8 }} />
+        <Text style={styles.guestButtonText}>Continue as Guest (Offline)</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.linkButton} onPress={() => setIsSignUp(!isSignUp)} disabled={loading}>
         <Text style={styles.linkText}>
           {isSignUp ? "Already have an account? Log In" : "Don't have an account? Sign Up"}
@@ -137,8 +165,10 @@ const styles = StyleSheet.create({
   tabText: { color: '#888', fontWeight: '700', fontSize: 14 },
   activeTabText: { color: '#FFFFFF', fontWeight: '800' },
   input: { width: '100%', height: 50, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, paddingHorizontal: 16, color: '#FFF', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  button: { width: '100%', height: 55, backgroundColor: '#38BDF8', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 16, marginTop: 10 },
+  button: { width: '100%', height: 55, backgroundColor: '#38BDF8', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12, marginTop: 10 },
   buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  guestButton: { width: '100%', height: 48, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(56,189,248,0.3)', backgroundColor: 'rgba(56,189,248,0.08)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  guestButtonText: { color: '#38BDF8', fontWeight: '700', fontSize: 14 },
   linkButton: { padding: 10 },
   linkText: { color: '#A0A0B0', fontSize: 14 }
 });

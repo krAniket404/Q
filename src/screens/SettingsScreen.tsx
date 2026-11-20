@@ -16,15 +16,19 @@ interface Props {
   setTheme: (id: string) => void;
   isBiometricEnabled: boolean;
   setIsBiometricEnabled: (v: boolean) => void;
+  isScreenSecure?: boolean;
+  setIsScreenSecure?: (v: boolean) => void;
   theme: Theme;
   notificationPrefs?: NotificationPrefs;
   setNotificationPrefs?: (prefs: NotificationPrefs) => void;
+  onSignOut?: () => void;
 }
 
 export default function SettingsScreen({
   mode, setMode, resetAppData, userLabels, pinnedFeatures, togglePin,
-  currentThemeId, setTheme, isBiometricEnabled, setIsBiometricEnabled, theme,
-  notificationPrefs = defaultPrefs(), setNotificationPrefs
+  currentThemeId, setTheme, isBiometricEnabled, setIsBiometricEnabled,
+  isScreenSecure = false, setIsScreenSecure,
+  theme, notificationPrefs = defaultPrefs(), setNotificationPrefs, onSignOut
 }: Props) {
   const C = theme;
 
@@ -137,7 +141,8 @@ export default function SettingsScreen({
       {/* Security Card */}
       <View style={[styles.glassCard, { padding: 20, marginBottom: 16, borderColor: C.border }]}>
         <Text style={[styles.cardHeaderTitle, { color: C.textSecondary }]}>ELITE SECURITY</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
             <View style={{ flex: 1, marginRight: 16 }}>
                 <Text style={{ color: C.textPrimary, fontSize: 15, fontWeight: '700' }}>Biometric Privacy Lock</Text>
                 <Text style={{ color: C.textSecondary, fontSize: 12, marginTop: 4 }}>Require Fingerprint/FaceID to unlock app</Text>
@@ -149,6 +154,19 @@ export default function SettingsScreen({
                 thumbColor={isBiometricEnabled ? '#FFF' : '#AAA'}
             />
         </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' }}>
+            <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={{ color: C.textPrimary, fontSize: 15, fontWeight: '700' }}>Anti-Screenshot & Shield</Text>
+                <Text style={{ color: C.textSecondary, fontSize: 12, marginTop: 4 }}>Block screen recording & task switcher previews</Text>
+            </View>
+            <Switch
+                value={isScreenSecure}
+                onValueChange={v => setIsScreenSecure && setIsScreenSecure(v)}
+                trackColor={{ false: '#333', true: C.accent }}
+                thumbColor={isScreenSecure ? '#FFF' : '#AAA'}
+            />
+        </View>
       </View>
 
       {/* Profile Card */}
@@ -158,10 +176,16 @@ export default function SettingsScreen({
           <View style={[styles.avatarBox, { borderColor: C.accent, backgroundColor: `${C.accent}18` }]}>
             <Text style={[styles.avatarText, { color: C.accent }]}>Q</Text>
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={[styles.profileName, { color: C.textPrimary }]}>Q User</Text>
             <Text style={[styles.profileMeta, { color: C.textSecondary }]}>{userLabels.length} ML decisions logged</Text>
           </View>
+          {onSignOut && (
+            <TouchableOpacity style={styles.logoutBtn} onPress={onSignOut}>
+              <Icon name="logout" size={16} color={C.accent} style={{ marginRight: 4 }} />
+              <Text style={[styles.logoutBtnText, { color: C.accent }]}>Log Out</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -229,7 +253,7 @@ export default function SettingsScreen({
       {/* Data Management Card */}
       <View style={[styles.glassCard, { padding: 20, borderColor: C.border }]}>
         <Text style={[styles.cardHeaderTitle, { color: C.textSecondary }]}>DATA & PRIVACY</Text>
-        <Text style={[styles.subtext, { color: C.textSecondary }]}>Your SMS data is parsed locally on your device. Cloud sync only stores parsed amounts and merchants.</Text>
+        <Text style={[styles.subtext, { color: C.textSecondary }]}>Your SMS data is parsed locally on your device with hardware-backed AES-256 encryption.</Text>
 
         <TouchableOpacity style={styles.dangerButton} onPress={handleClearData}>
           <Icon name="trash-can-outline" size={16} color={C.danger} style={{ marginRight: 8 }} />
@@ -257,6 +281,8 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 18, fontWeight: 'bold' },
   profileName: { fontSize: 16, fontWeight: '600' },
   profileMeta: { fontSize: 12, marginTop: 2 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  logoutBtnText: { fontSize: 12, fontWeight: '700' },
   modeRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
   modeButton: { flex: 1, flexDirection: 'row', paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   modeButtonText: { fontSize: 12, fontWeight: '700' },

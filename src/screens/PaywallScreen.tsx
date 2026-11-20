@@ -37,7 +37,7 @@ export default function PaywallScreen({ onClose, onSubscribe, loading, theme }: 
   const styles = useMemo(() => createStyles(C), [C]);
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>Unlock CentiQ Pro</Text>
+      <Text style={styles.headerTitle}>Unlock Q Pro</Text>
       <Text style={styles.subtext}>Upgrade to access the AI Coach and unlock Liberal Mode to train your personal Machine Learning model.</Text>
 
       <View style={styles.featuresContainer}>

@@ -67,7 +67,10 @@ test('QNoticed renders only when there is a pattern and wires the action', async
   const onExplore = jest.fn();
   const none = await render(<QNoticed transactions={[]} theme={theme} onExplore={onExplore} />);
   expect(none.toJSON()).toBeNull();
-  const t = [tx(22, 500), tx(23, 400), tx(21, 450), tx(13, 100), tx(11, 150)];
+  // QNoticed looks at "the last 30 days" from the real clock, so these purchases are built from today, not from a fixed date.
+  const today = new Date();
+  const recent = (hour: number, amount: number) => { const d = new Date(today); d.setDate(d.getDate() - 2); d.setHours(hour, 0, 0, 0); return { type: 'debit', amount, date: d } as any; };
+  const t = [recent(22, 500), recent(23, 400), recent(21, 450), recent(13, 100), recent(11, 150)];
   const r = await render(<QNoticed transactions={t} theme={theme} onExplore={onExplore} />);
   expect(JSON.stringify(r.toJSON())).toContain('Your spending changes after 9 PM.');
   const btn = r.root.findAll(n => n.props.accessibilityRole === 'button' && typeof n.props.onPress === 'function')[0];

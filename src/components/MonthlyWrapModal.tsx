@@ -137,7 +137,7 @@ export default function MonthlyWrapModal({ visible, onClose, scores, wrapData, w
             <TouchableOpacity
                 style={[styles.shareBtn, { backgroundColor: C.accent }]}
                 onPress={() => {
-                  const shareMessage = `I just unlocked my CentiQ Monthly Wrap! 🚀\n\n💰 Wellness Score: ${scores.wellness}/100\n👤 Identity: ${wrapData.persona.name}\n💸 Total Spent: ₹${Math.round(wrapData.totalSpend).toLocaleString('en-IN')}\n🎯 Top Category: ${wrapData.topCat}\n\nTrack your money behavior with CentiQ!`;
+                  const shareMessage = `I just unlocked my Q Monthly Wrap! 🚀\n\n💰 Wellness Score: ${scores.wellness}/100\n👤 Identity: ${wrapData.persona.name}\n💸 Total Spent: ₹${Math.round(wrapData.totalSpend).toLocaleString('en-IN')}\n🎯 Top Category: ${wrapData.topCat}\n\nTrack your money behavior with Q!`;
                   Share.share({ message: shareMessage });
                 }}
             >

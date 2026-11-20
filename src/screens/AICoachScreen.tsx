@@ -8,9 +8,10 @@ import QStatus from '../components/QStatus';
 import Reveal from '../components/Reveal';
 import DiagnosticSteps from '../components/coach/DiagnosticSteps';
 import { buildFacts } from '../lib/coachFacts';
+import { answerQuestion } from '../coach';
+import type { CoachContext } from '../coach';
 import { Typography } from '../theme/typography';
 import { TypeScale } from '../theme/tokens';
-import { buildRiskProfile } from '../ml/riskProfile';
 
 const { SmsModule } = NativeModules;
 const SESSIONS_STORAGE_KEY = 'centiq_chat_sessions_v2'; // New key to reset old chats
@@ -24,7 +25,6 @@ interface Props {
 }
 
 const SUGGESTED_QUESTIONS = [
-  { text: "What are my peak ML risk hours?", icon: "clock-alert-outline" },
   { text: "Roast my spending habits", icon: "fire" },
   { text: "Why is my impulse score high?", icon: "flash-outline" },
   { text: "Give me a harsh saving tip", icon: "piggy-bank-outline" },
@@ -94,6 +94,9 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
   const [showHistory, setShowHistory] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const facts = useMemo(() => buildFacts(transactions), [transactions]);
+  const ctxRef = useRef<CoachContext>({ turns: 0 });                       // what the last question was about, for follow-ups
+  const budgetsRef = useRef<{ [category: string]: number }>({});
+  useEffect(() => { (async () => { try { const raw = await SmsModule.loadData('budgets:v1'); if (raw) { budgetsRef.current = JSON.parse(raw); } } catch { /* no budgets yet */ } })(); }, []);
 
   useEffect(() => {
     const loadSessions = async () => {
@@ -109,7 +112,7 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
     if (sessions.length > 0) SmsModule.saveData(SESSIONS_STORAGE_KEY, JSON.stringify(sessions)).catch(() => {});
   }, [sessions]);
 
-  const startNewChat = () => { setActiveSessionId(null); setMessages([]); setShowHistory(false); };
+  const startNewChat = () => { setActiveSessionId(null); setMessages([]); setShowHistory(false); ctxRef.current = { turns: 0 }; };
   const openChat = (id: string) => {
     const session = sessions.find(s => s.id === id);
     if (session) { setActiveSessionId(id); setMessages(session.messages); setShowHistory(false); }
@@ -139,14 +142,6 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
     const monthlyCredit = transactions.filter(t => t.type === 'credit' && t.date.getMonth() === now.getMonth() && t.date.getFullYear() === now.getFullYear()).reduce((a, b) => a + b.amount, 0);
     const savedThisMonth = Math.round(monthlyCredit - monthlyDebit);
 
-    if (msg.includes('risk') || msg.includes('peak') || msg.includes('window') || msg.includes('hours')) {
-      const profile = buildRiskProfile(transactions);
-      if (profile.windows.length > 0) {
-        const w = profile.windows[0];
-        return `My ML model analyzed your last ${profile.historyDays} days: your top spending risk window is ${w.label}, accounting for ~${Math.round(w.share * 100)}% of your weekly spending (₹${Math.round(w.expected).toLocaleString('en-IN')}). Consider locking non-essentials during those hours! ⏰`;
-      }
-      return "I don't have enough debit history yet to build an ML risk profile for you (need at least 15 debit transactions across 14 days). Keep using the app and check back soon! 📈";
-    }
     if (msg.includes('roast')) return `Your spending habits? Let's just say your wallet is crying right now. You dropped ₹${Math.round(totalSpend).toLocaleString('en-IN')} overall. Your favorite hobby seems to be making ${topCat} richer by ₹${topCatAmount.toLocaleString('en-IN')}. Stop swiping your card like it's a magic wand! 🔥`;
     if (msg.includes('discipline') || msg.includes('improve')) return `Your Discipline score is ${scores.discipline}/100. To improve it, stop pretending you "need" another hoodie. Try making your weekly spending consistent instead of splurging every payday like a monarch on payday. 👑`;
     if (msg.includes('impulse') || msg.includes('impulsive')) {
@@ -182,78 +177,19 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
     return null; // Fallback to Gemini
   };
 
-  const generateDataSummary = async () => {
-    const debitTxns = transactions.filter(t => t.type === 'debit');
-    const totalSpend = debitTxns.reduce((a, b) => a + b.amount, 0);
-    const catTotals: { [key: string]: number } = {};
-    debitTxns.forEach(t => { catTotals[t.category || 'Other'] = (catTotals[t.category || 'Other'] || 0) + t.amount; });
-    const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 3);
-
-    const merchants: { [key: string]: number } = {};
-    debitTxns.slice(0, 50).forEach(t => { merchants[t.merchant] = (merchants[t.merchant] || 0) + t.amount; });
-    const topMerchants = Object.entries(merchants).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
-    let budgetContext = "";
+  // Open-ended questions only. The model receives totals and shares, never merchants, dates or raw transactions,
+  // and its reply is shown only if every figure in it matches the data (see src/coach/llm.ts).
+  const callGemini = async (prompt: string): Promise<string | null> => {
+    if (API_KEY === 'GEMINI_API_HERE') { return null; }
     try {
-        const rawBudgets = await SmsModule.loadData('budgets:v1');
-        if (rawBudgets) {
-            const budgets = JSON.parse(rawBudgets);
-            budgetContext = "\nBudgets vs Actual Spend:\n" + Object.entries(budgets).map(([cat, limit]) =>
-                `- ${cat}: Limit ₹${limit}, Spent ₹${Math.round(catTotals[cat] || 0)}`
-            ).join('\n');
-        }
-    } catch(e) {}
-
-    return `
-      Financial Summary:
-      - Total Spend: ₹${totalSpend.toLocaleString('en-IN')}
-      - Top Categories: ${sortedCats.map(c => `${c[0]} (₹${Math.round(c[1])})`).join(', ')}
-      - Top Merchants: ${topMerchants.map(m => `${m[0]} (₹${Math.round(m[1])})`).join(', ')}
-      - Discipline: ${scores.discipline}, Impulse: ${scores.impulse}, Volatility: ${scores.volatility}, Wellness: ${scores.wellness}
-      ${budgetContext}
-    `;
-  };
-
-  // 2. Gemini AI Brain (For everything else & humor)
-  const getGeminiResponse = async (userText: string): Promise<string> => {
-    try {
-      const dataSummary = await generateDataSummary();
-      const prompt = `
-        You are a hilarious, slightly sarcastic, but highly intelligent behavioral finance coach named Q.
-        You have access to the user's financial data summary and budget status:
-        ${dataSummary}
-
-        The user asked: "${userText}"
-
-        Rules:
-        1. If they ask about their data, use the summary to give accurate answers.
-        2. SMART BUDGETING: If you see categories where they are significantly under budget (save ₹2k+) and others where they are over, proactively suggest "Rebalancing".
-        3. SUBSCRIPTION INTELLIGENCE: Mention any repetitive merchants where they haven't logged "Worth It" tags lately (Ghost detection).
-        4. Be brief (under 60 words). Emojis allowed. No markdown.
-      `;
-
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 800 }
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 300, temperature: 0.4 } }),
       });
-
-      if (!response.ok) {
-        console.warn("Gemini API Error:", response.status, response.statusText);
-        return "I'm having trouble connecting to my cloud brain. Ask me about your scores instead!";
-      }
-
-      const data = await response.json();
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text;
-      }
-      return "My brain short-circuited. Try asking me something else.";
-    } catch (e) {
-      return "I'm having trouble connecting to my cloud brain. Ask me about your scores instead!";
-    }
+      if (!response.ok) { return null; }
+      const json = await response.json();
+      return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+    } catch { return null; }
   };
 
   const sendMessage = async (textToSend?: string) => {
@@ -266,18 +202,23 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
     setInputText('');
     setIsLoading(true);
 
-    // Try local brain first
-    const localResponse = getLocalResponse(messageText);
+    // 1) the question engine works the answer out from the user's own transactions,
+    // 2) the app's built-in lines handle roast / tip / joke / persona,
+    // 3) only a question nothing else can answer goes to the AI model, and its reply is checked against the data.
+    const started = Date.now();
+    const answer = await answerQuestion({
+      question: messageText,
+      data: { transactions, now: new Date(), scores, budgets: budgetsRef.current },
+      ctx: ctxRef.current,
+      tone: 'sassy',
+      legacy: getLocalResponse,
+      llm: callGemini,
+    }).catch(() => null);
+    if (answer) { ctxRef.current = answer.ctx; }
+    const pause = Math.max(0, 900 - (Date.now() - started));       // let the "reading your data" lines show for a moment
 
     setTimeout(async () => {
-      let botResponse = "";
-
-      if (localResponse) {
-        botResponse = localResponse;
-      } else {
-        // Fallback to Gemini for general knowledge/humor
-        botResponse = await getGeminiResponse(messageText);
-      }
+      const botResponse = answer ? answer.text : "I couldn't work that one out just now. Ask me about your spending, like \"How much did I spend this month?\"";
 
       const aiMessage: Message = { role: 'assistant', content: botResponse };
       const finalMessages = [...newMessages, aiMessage];
@@ -297,7 +238,7 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
         setSessions(prev => [newSession, ...prev]);
         setActiveSessionId(newSession.id);
       }
-    }, 800);
+    }, pause);
   };
 
   useEffect(() => {
@@ -413,7 +354,7 @@ export default function AICoachScreen({ transactions, scores, theme }: Props) {
             onChangeText={setInputText}
             multiline
           />
-          <TouchableOpacity style={styles.sendButton} onPress={() => sendMessage()} disabled={isLoading}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Send message" style={styles.sendButton} onPress={() => sendMessage()} disabled={isLoading}>
             <Icon name="send" size={18} color={theme.bg} />
           </TouchableOpacity>
         </View>

@@ -23,7 +23,7 @@ import CircularScoreCard from './src/components/CircularScoreCard';
 import PremiumChart from './src/components/PremiumChart';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import { runInBatches, getFirebaseAuth, getFirebaseFirestore, getServerTimestamp } from './src/lib/firebase';
+import { runInBatches, getFirebaseAuth, getFirebaseFirestore, getServerTimestamp, signOutUser } from './src/lib/firebase';
 import AuthScreen from './src/screens/AuthScreen';
 import { getScoreColor as getDynamicScoreColor } from './src/theme/scoreColor';
 import PaywallScreen from './src/screens/PaywallScreen';
@@ -90,8 +90,10 @@ export default function App() {
   const [merchantMap, setMerchantMap] = useState<{[key: string]: string}>({});
   const [currentThemeId, setCurrentThemeId] = useState('q');
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+  const [isScreenSecure, setIsScreenSecure] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const appStateRef = useRef(AppState.currentState);
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(defaultPrefs());
   const [feedbackState, setFeedbackState] = useState<FeedbackState>({});
 
@@ -226,11 +228,44 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (SmsModule && typeof SmsModule.setScreenSecurity === 'function') {
+      SmsModule.setScreenSecurity(isBiometricEnabled || isScreenSecure);
+    }
+  }, [isBiometricEnabled, isScreenSecure]);
+
+  useEffect(() => {
     if (isBiometricEnabled && isLoaded) {
       setIsLocked(true);
       handleBiometricUnlock();
     }
   }, [isBiometricEnabled, isLoaded]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+        if (isBiometricEnabled && isLoaded) {
+          setIsLocked(true);
+          handleBiometricUnlock();
+        }
+      }
+      appStateRef.current = nextState;
+    });
+    return () => sub.remove();
+  }, [isBiometricEnabled, isLoaded]);
+
+  const handleAuthSuccess = (user: any) => {
+    setSession(user);
+    setIsLoaded(true);
+    if (user?.uid && user.uid !== 'guest_user') {
+      pullFromCloud(user.uid);
+      fetchMLFromSupabase(user.uid);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOutUser();
+    setSession(null);
+  };
 
   const handleBiometricUnlock = async () => {
     try {
@@ -748,6 +783,7 @@ export default function App() {
       if (parsed.merchantMap) setMerchantMap(parsed.merchantMap);
       if (parsed.currentThemeId) setCurrentThemeId(parsed.currentThemeId);
       if (parsed.isBiometricEnabled) setIsBiometricEnabled(parsed.isBiometricEnabled);
+      if (typeof parsed.isScreenSecure === 'boolean') setIsScreenSecure(parsed.isScreenSecure);
       if (parsed.notificationPrefs) setNotificationPrefs(sanitizePrefs(parsed.notificationPrefs));
       if (parsed.feedbackState) setFeedbackState(parsed.feedbackState);
 
@@ -785,6 +821,7 @@ export default function App() {
       merchantMap: overrides.merchantMap ?? merchantMap,
       currentThemeId: overrides.currentThemeId ?? currentThemeId,
       isBiometricEnabled: overrides.isBiometricEnabled ?? isBiometricEnabled,
+      isScreenSecure: overrides.isScreenSecure ?? isScreenSecure,
       notificationPrefs: overrides.notificationPrefs ?? notificationPrefs,
       feedbackState: overrides.feedbackState ?? feedbackState,
     };
@@ -1480,14 +1517,14 @@ export default function App() {
           <Icon name="lightning-bolt" size={40} color={theme.accent} />
         </View>
         <ActivityIndicator color={theme.accent} size="large" />
-        <Text style={{ color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginTop: 24 }}>Waking up CentiQ</Text>
+        <Text style={{ color: theme.textPrimary, fontSize: 18, fontWeight: '800', marginTop: 24 }}>Waking up Q</Text>
         <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 8 }}>Preparing your behavioral profile...</Text>
       </View>
     );
   }
 
   if (!session) {
-    return <AuthScreen />;
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (!hasPermission) {
@@ -1523,7 +1560,7 @@ export default function App() {
             <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: `${theme.accent}15`, justifyContent: 'center', alignItems: 'center', marginBottom: 30 }}>
                 <Icon name="fingerprint" size={48} color={theme.accent} />
             </View>
-            <Text style={{ color: theme.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>CentiQ is Locked</Text>
+            <Text style={{ color: theme.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>Q is Locked</Text>
             <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 40, lineHeight: 20 }}>Please authenticate using your device biometric or PIN to access your profile.</Text>
 
             <TouchableOpacity
@@ -2172,9 +2209,12 @@ export default function App() {
           setTheme={(id) => { setCurrentThemeId(id); saveState({ currentThemeId: id }); }}
           isBiometricEnabled={isBiometricEnabled}
           setIsBiometricEnabled={(v) => { setIsBiometricEnabled(v); saveState({ isBiometricEnabled: v }); }}
+          isScreenSecure={isScreenSecure}
+          setIsScreenSecure={(v) => { setIsScreenSecure(v); saveState({ isScreenSecure: v }); }}
           theme={theme}
           notificationPrefs={notificationPrefs}
           setNotificationPrefs={(prefs) => { setNotificationPrefs(prefs); saveState({ notificationPrefs: prefs }); }}
+          onSignOut={handleSignOut}
         />
       )}
 
